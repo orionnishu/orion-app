@@ -1,0 +1,44 @@
+# Python / Virtualenv
+venv/
+.env
+__pycache__/
+*.pyc
+
+# SQLite, runtime DB and logs
+*.db
+*.sqlite
+services/*/db/
+services/*/logs/
+pi-monitor/db/
+pi-monitor/logs/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# SSH / keys / secrets
+*.pem
+*.key
+id_rsa*
+id_dsa*
+ssh_config
+
+# Mounts / large external storage (do NOT commit NAS contents)
+/mnt/
+/mnt/orion-nas/
+/media/
+/run/
+
+# Misc large / generated
+node_modules/
+dist/
+tmp/
+*.tar.gz
+*.zip
+
+# Git LFS pointer files (if you later use LFS)
+*.jpg
+*.png
+*.mp4
