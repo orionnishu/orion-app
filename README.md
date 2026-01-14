@@ -9,7 +9,7 @@ Important:
 - Do NOT commit secrets, database files, or the mounted NAS contents (`/mnt/orion-nas/`).
 - Collector owns timestamps; DB never auto‑generates times — keep that behavior unchanged.
 
-See `orion_home_server_full_context_for_copilot.md` for full architectural context.
+See [`docs/architecture.md`](docs/architecture.md) for full architectural context.
 
 Getting started (local)
 1. Create Python virtualenv and install dependencies:
