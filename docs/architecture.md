@@ -1,4 +1,4 @@
-# ORION HOME SERVER – COMPLETE CONTEXT (FOR GITHUB COPILOT)
+# ORION HOME SERVER – ARCHITECTURE & DESIGN
 
 > **Purpose of this document**
 > This file captures the *entire architectural, technical, and operational context* of the ORION Home Server project so that GitHub Copilot (and any future agentic tooling) can reason correctly without re‑discovery.
@@ -21,7 +21,7 @@ Key design goals:
 - Low resource usage (Pi‑friendly)
 - No vendor lock‑in
 - Clear separation of concerns
-- Long‑term stability (no “rot”)
+- Long‑term stability (no "rot")
 
 ---
 
@@ -315,4 +315,3 @@ Reasons:
 - Respect separation: admin vs public
 
 This document is authoritative.
-
