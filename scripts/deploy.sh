@@ -4,7 +4,7 @@ set -euo pipefail
 echo "=== ORION DEPLOY START ==="
 
 APP_DIR="$HOME/server"
-SERVICE_NAME="orion-app"
+SERVICE_NAME="orion-server.service"
 
 cd "$APP_DIR"
 

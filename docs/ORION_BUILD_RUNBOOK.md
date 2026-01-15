@@ -165,7 +165,7 @@ pip install -r requirements.txt
 Create service file:
 
 ```bash
-sudo nano /etc/systemd/system/orion-app.service
+sudo nano /etc/systemd/system/orion-server.service
 ```
 
 Contents:
@@ -192,14 +192,14 @@ Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable orion-app
-sudo systemctl start orion-app
+sudo systemctl enable orion-server
+sudo systemctl start orion-server
 ```
 
 Verify:
 
 ```bash
-systemctl status orion-app
+systemctl status orion-server
 ```
 
 ---
