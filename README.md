@@ -1,25 +1,63 @@
 # ORION Home Server
 
-This repository contains the ORION Home Server code and configs:
-- FastAPI admin dashboard and monitoring UI (`app/`)
-- Services: `pi-monitor/`, `webdav/`
-- Project layout follows the canonical `~/server/` structure used on the Pi
+ORION is a private, Raspberry Pi–based home server focused on **stability, correctness, and security**.
 
-Important:
-- Do NOT commit secrets, database files, or the mounted NAS contents (`/mnt/orion-nas/`).
-- Collector owns timestamps; DB never auto‑generates times — keep that behavior unchanged.
+It combines:
+- FastAPI (admin & dashboard)
+- nginx WebDAV (NAS)
+- Tailscale (secure networking & HTTPS)
 
-See [`docs/architecture.md`](docs/architecture.md) for full architectural context.
+This repository is the **authoritative source** for ORION’s code and documentation.
 
-Getting started (local)
-1. Create Python virtualenv and install dependencies:
-   ```bash
-   python3 -m venv venv
-   . venv/bin/activate
-   pip install -r requirements.txt
-   ```
-2. Edit configs (paths are absolute by design). Start webdav and FastAPI per the project's run scripts.
+---
 
-Contributing
-- Keep per‑user isolation.
-- Do not change timestamp behavior or DB schema without corresponding migration scripts.
+## What ORION Is
+
+- Hardware: Raspberry Pi 5
+- OS: Ubuntu
+- Network: Tailscale (MagicDNS + Serve)
+- Storage: External USB / HDD mounted at `/mnt/orion-nas`
+- Web App: FastAPI + Uvicorn
+- NAS: nginx WebDAV
+- Android Clients:
+  - FolderSync (supported, primary)
+  - Material Files (supported, browsing)
+
+## What ORION Is Not
+
+- No router port forwarding
+- No public internet exposure
+- No SMB / Samba
+- No unreliable WebDAV clients
+
+---
+
+## Repository Structure
+
+```
+server/
+├── app/                 # FastAPI application
+├── services/
+│   └── webdav/           # WebDAV configs and scripts
+├── scripts/              # Admin / deployment scripts
+├── docs/                 # Architecture & runbooks
+└── README.md
+```
+
+---
+
+## Documentation
+
+- Architecture: `docs/architecture.md`
+- Build & rebuild: `docs/ORION_BUILD_RUNBOOK.md`
+
+These docs reflect the **real, working system** — not experiments.
+
+---
+
+## Status
+
+ORION is **stable** and in daily use for private backups.
+Future enhancements are deliberate and incremental.
+
+---
