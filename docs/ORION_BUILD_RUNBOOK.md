@@ -376,3 +376,287 @@ These will be revisited later with care.
 ---
 
 **End of Runbook**
+
+
+†*******************
+*** New content added below, to be reviewed later:
+
+
+
+## PART A — HISTORICAL CONTEXT & SETUP NOTES
+
+This section documents the evolution of ORION and includes:
+- Initial networking assumptions
+- Raspberry Pi + Ubuntu specifics
+- Lessons learned during early setup
+- Constraints that influenced final design
+
+These notes are preserved because:
+- They explain *why* certain choices were made
+- They prevent repeating known dead ends
+- They are useful when reasoning about future changes
+
+(Refer to earlier versions of this file in Git history for full narrative.)
+
+---
+
+## PART B — FINAL, VERIFIED ARCHITECTURE (SUMMARY)
+
+- Hardware: Raspberry Pi 5
+- OS: Ubuntu 22.04+
+- Networking: Tailscale (MagicDNS + Serve)
+- Web App: FastAPI (uvicorn, systemd-managed)
+- NAS: nginx WebDAV
+- Storage: USB disk mounted at `/mnt/orion-nas`
+- Users: Per-user directories under `/mnt/orion-nas/users`
+- Access model: nginx `$remote_user` → `alias` mapping
+- Android clients:
+  - Supported: FolderSync (primary), Material Files (browse)
+  - Unsupported: Solid Explorer
+
+Detailed architecture lives in `docs/architecture.md`.
+
+---
+
+# PART C — APPENDIX: REBUILD RUNBOOK (CRASH / FRESH INSTALL)
+
+Follow **exactly in order**. Do not skip steps.
+
+## 0. Preconditions
+
+- Raspberry Pi 5
+- Fresh Ubuntu install (22.04+)
+- Internet access
+- External USB drive available
+- User account: `orion`
+
+---
+
+## 1. Base OS Preparation
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y   git curl wget unzip   ca-certificates   gnupg lsb-release   nginx nginx-extras apache2-utils   python3 python3-venv python3-pip
+```
+
+Verify:
+```bash
+python3 --version
+nginx -v
+```
+
+---
+
+## 2. Storage Setup (CRITICAL)
+
+### Identify disk
+```bash
+lsblk
+blkid
+```
+
+Assume disk: `/dev/sda1`
+
+### Format (DATA LOSS)
+```bash
+sudo mkfs.ext4 /dev/sda1
+```
+
+### Mount
+```bash
+sudo mkdir -p /mnt/orion-nas
+sudo mount /dev/sda1 /mnt/orion-nas
+df -h /mnt/orion-nas
+```
+
+### Persist mount
+```bash
+sudo blkid /dev/sda1
+sudo nano /etc/fstab
+```
+
+Add:
+```
+UUID=<uuid> /mnt/orion-nas ext4 defaults,noatime 0 2
+```
+
+```bash
+sudo mount -a
+```
+
+---
+
+## 3. Users & Groups
+
+```bash
+sudo groupadd orion || true
+sudo usermod -aG orion orion
+sudo usermod -aG orion www-data
+```
+
+Verify:
+```bash
+groups orion
+groups www-data
+```
+
+---
+
+## 4. Directory Layout
+
+```bash
+sudo mkdir -p /mnt/orion-nas/users
+sudo chown -R orion:orion /mnt/orion-nas
+sudo chmod 2770 /mnt/orion-nas/users
+```
+
+---
+
+## 5. nginx WebDAV
+
+### Temp paths
+```bash
+sudo mkdir -p /var/lib/nginx/tmp
+sudo chown -R www-data:www-data /var/lib/nginx
+```
+
+### WebDAV config
+
+Create `/etc/nginx/sites-available/orion-webdav`:
+
+```nginx
+server {
+    listen 8082;
+    server_name _;
+
+    client_max_body_size 0;
+    client_body_timeout 300s;
+
+    client_body_temp_path /var/lib/nginx/tmp;
+    proxy_temp_path       /var/lib/nginx/tmp;
+    fastcgi_temp_path     /var/lib/nginx/tmp;
+    uwsgi_temp_path       /var/lib/nginx/tmp;
+    scgi_temp_path        /var/lib/nginx/tmp;
+
+    auth_basic "ORION NAS";
+    auth_basic_user_file /etc/nginx/dav/users.htpasswd;
+
+    if ($remote_user = "") { return 401; }
+
+    location / {
+        alias /mnt/orion-nas/users/$remote_user/;
+
+        dav_methods PUT DELETE MKCOL COPY MOVE;
+        dav_ext_methods PROPFIND OPTIONS;
+        dav_access user:rw group:rw all:rw;
+
+        create_full_put_path on;
+        autoindex off;
+
+        add_header DAV "1,2" always;
+        add_header Allow "OPTIONS, GET, HEAD, PROPFIND, PUT, DELETE, MKCOL, MOVE, COPY" always;
+    }
+}
+```
+
+Enable:
+```bash
+sudo ln -s /etc/nginx/sites-available/orion-webdav /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## 6. Authentication
+
+```bash
+sudo mkdir -p /etc/nginx/dav
+sudo htpasswd -c /etc/nginx/dav/users.htpasswd praveen_flip
+```
+
+---
+
+## 7. Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+Verify:
+```bash
+tailscale status
+tailscale ip -4
+```
+
+---
+
+## 8. Tailscale Serve (AUTHORITATIVE)
+
+```bash
+sudo tailscale serve reset
+sudo tailscale serve --bg http://127.0.0.1:8000
+sudo tailscale serve --bg /dav http://127.0.0.1:8082
+tailscale serve status
+```
+
+---
+
+## 9. FastAPI App
+
+```bash
+cd ~/server
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+```bash
+sudo systemctl enable orion-server
+sudo systemctl start orion-server
+```
+
+Verify:
+```bash
+curl http://127.0.0.1:8000
+```
+
+
+## 10. User Provisioning
+
+```bash
+sudo ./orion_add_webdav_user.sh praveen_flip
+sudo ./orion_add_webdav_user.sh ruchi_realme
+```
+
+---
+
+## 11. Validation Checklist
+
+```bash
+curl -u praveen_flip:password -X PROPFIND https://<host>.ts.net/
+curl -u praveen_flip:password -T /etc/hostname https://<host>.ts.net/test.txt
+```
+
+FolderSync:
+- Account test: PASS
+- Sync: PASS
+
+---
+
+## 12. Known Pitfalls
+
+- Solid Explorer is unsupported
+- Always check `tailscale serve status`
+- 405 errors usually indicate routing mismatch
+- SSL errors with IP access are expected
+
+---
+
+## 13. Expected Rebuild Time
+
+- 30–45 minutes if followed exactly
+- Days without this runbook
+
+---
