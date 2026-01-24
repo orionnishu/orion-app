@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # ===============================
 SRC_DIR="/mnt/orion-nas/users/ruchi_realme/Camera/"
 DEST_USER="pkaga"
-DEST_HOST="192.168.100.2"      # ⚠️ CHANGE if your PC uses a different IP
+DEST_HOST="192.168.50.2"      # ⚠️ CHANGE if your PC uses a different IP
 DEST_DIR="/cygdrive/d/pisync/inbound"
 
 LOG_DIR="/var/log/pisynctopc"
