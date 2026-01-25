@@ -7,7 +7,7 @@ set -Eeuo pipefail
 SRC_DIR="/mnt/orion-nas/users/ruchi_realme/Camera/"
 DEST_USER="pkaga"
 DEST_HOST="192.168.50.2"
-DEST_DIR="/d/pisync/inbound"
+DEST_DIR="D:\\pisync\\inbound"
 
 LOG_DIR="/var/log/pisynctopc"
 TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
@@ -27,7 +27,6 @@ RSYNC_OPTS=(
 # PRE-FLIGHT
 # ===============================
 mkdir -p "$LOG_DIR"
-
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "========================================"
@@ -49,12 +48,21 @@ echo "Checking SSH connectivity..."
 ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" "echo SSH_OK" >/dev/null
 echo "SSH OK"
 
+# Verify destination directory exists (Windows-native check)
+echo "Verifying destination directory on Windows..."
+ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" \
+  "cmd /c if not exist \"$DEST_DIR\" exit 1" || {
+    echo "ERROR: Destination directory does not exist: $DEST_DIR"
+    exit 1
+  }
+
 # ===============================
 # SYNC (COPY + DELETE FILES)
 # ===============================
 echo "Starting rsync (files will be removed from source after successful transfer)..."
 
 rsync "${RSYNC_OPTS[@]}" \
+  --rsync-path="C:/msys64/usr/bin/rsync.exe" \
   -e "ssh $SSH_OPTS" \
   "$SRC_DIR" \
   "$DEST_USER@$DEST_HOST:$DEST_DIR"
