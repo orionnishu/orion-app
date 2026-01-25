@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # ===============================
 SRC_DIR="/mnt/orion-nas/users/ruchi_realme/Camera/"
 DEST_USER="pkaga"
-DEST_HOST="192.168.50.2"      # ⚠️ CHANGE if your PC uses a different IP
+DEST_HOST="192.168.50.2"
 DEST_DIR="/d/pisync/inbound"
 
 LOG_DIR="/var/log/pisynctopc"
@@ -19,8 +19,8 @@ RSYNC_OPTS=(
   --progress
   --stats
   --partial
-  --inplace
   --human-readable
+  --remove-source-files
 )
 
 # ===============================
@@ -31,7 +31,7 @@ mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "========================================"
-echo " Pi → Windows Sync Started"
+echo " Pi → Windows Sync (MOVE MODE)"
 echo " Time: $(date)"
 echo " Source: $SRC_DIR"
 echo " Destination: $DEST_USER@$DEST_HOST:$DEST_DIR"
@@ -47,18 +47,23 @@ fi
 # Verify SSH connectivity
 echo "Checking SSH connectivity..."
 ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" "echo SSH_OK" >/dev/null
-
 echo "SSH OK"
 
 # ===============================
-# SYNC
+# SYNC (COPY + DELETE FILES)
 # ===============================
-echo "Starting rsync..."
+echo "Starting rsync (files will be removed from source after successful transfer)..."
 
 rsync "${RSYNC_OPTS[@]}" \
   -e "ssh $SSH_OPTS" \
   "$SRC_DIR" \
   "$DEST_USER@$DEST_HOST:$DEST_DIR"
+
+# ===============================
+# CLEANUP EMPTY DIRECTORIES
+# ===============================
+echo "Removing empty directories from source..."
+find "$SRC_DIR" -type d -empty -delete
 
 echo "========================================"
 echo " Sync completed successfully"
