@@ -24,6 +24,12 @@ RSYNC_OPTS=(
   --remove-source-files
 )
 
+# Wake/sleep controls
+WAKE_CMD="wakemypc"
+SLEEP_CMD="sleepmypc"
+MAX_WAKE_RETRIES=10
+WAKE_SLEEP_SEC=2
+
 # ===============================
 # PRE-FLIGHT
 # ===============================
@@ -44,12 +50,37 @@ if [[ ! -d "$SRC_DIR" ]]; then
   exit 1
 fi
 
-# Verify SSH connectivity
-echo "Checking SSH connectivity..."
-ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" "bash -lc 'echo SSH_OK'" >/dev/null
-echo "SSH OK"
+# ===============================
+# CHECK / WAKE PC
+# ===============================
+echo "Checking if destination PC is reachable via SSH..."
 
-# Verify destination directory (FORCED MSYS)
+attempt=1
+while true; do
+  if ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" "bash -lc 'echo SSH_OK'" >/dev/null 2>&1; then
+    echo "Destination PC is ONLINE"
+    break
+  fi
+
+  if (( attempt > MAX_WAKE_RETRIES )); then
+    echo "ERROR: PC did not come online after $MAX_WAKE_RETRIES attempts"
+    exit 1
+  fi
+
+  if (( attempt == 1 )); then
+    echo "PC is OFFLINE — sending wake signal..."
+    $WAKE_CMD
+  else
+    echo "Waiting for PC to wake (attempt $attempt/$MAX_WAKE_RETRIES)..."
+  fi
+
+  sleep "$WAKE_SLEEP_SEC"
+  ((attempt++))
+done
+
+# ===============================
+# VERIFY DESTINATION DIRECTORY (MSYS)
+# ===============================
 echo "Verifying destination directory on Windows..."
 ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" \
   "bash -lc '[[ -d \"$DEST_DIR\" ]]'" \
@@ -70,6 +101,12 @@ rsync "${RSYNC_OPTS[@]}" \
 # ===============================
 echo "Removing empty subdirectories from source (keeping root)..."
 find "$SRC_DIR" -mindepth 1 -type d -empty -delete
+
+# ===============================
+# PUT PC TO SLEEP
+# ===============================
+echo "Sync complete — putting PC to sleep..."
+$SLEEP_CMD || echo "WARNING: sleepmypc failed (continuing)"
 
 echo "========================================"
 echo " Sync completed successfully"
