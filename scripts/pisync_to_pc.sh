@@ -14,12 +14,13 @@ TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
 LOG_FILE="$LOG_DIR/pisync_$TIMESTAMP.log"
 
 SSH_OPTS="-o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+
 RSYNC_OPTS=(
   -avt
   --progress
   --stats
-  --partial
   --human-readable
+  --partial
   --remove-source-files
 )
 
@@ -45,16 +46,14 @@ fi
 
 # Verify SSH connectivity
 echo "Checking SSH connectivity..."
-ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" "echo SSH_OK" >/dev/null
+ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" "bash -lc 'echo SSH_OK'" >/dev/null
 echo "SSH OK"
 
-# Verify destination directory exists (Windows-native check)
+# Verify destination directory (FORCED MSYS)
 echo "Verifying destination directory on Windows..."
 ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" \
-  "cmd /c if not exist \"$DEST_DIR\" exit 1" || {
-    echo "ERROR: Destination directory does not exist: $DEST_DIR"
-    exit 1
-  }
+  "bash -lc '[[ -d \"$DEST_DIR\" ]]'" \
+  || { echo "ERROR: Destination directory does not exist: $DEST_DIR"; exit 1; }
 
 # ===============================
 # SYNC (COPY + DELETE FILES)
@@ -62,7 +61,6 @@ ssh $SSH_OPTS "$DEST_USER@$DEST_HOST" \
 echo "Starting rsync (files will be removed from source after successful transfer)..."
 
 rsync "${RSYNC_OPTS[@]}" \
-  --rsync-path="C:/msys64/usr/bin/rsync.exe" \
   -e "ssh $SSH_OPTS" \
   "$SRC_DIR" \
   "$DEST_USER@$DEST_HOST:$DEST_DIR"
