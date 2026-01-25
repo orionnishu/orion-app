@@ -62,8 +62,8 @@ rsync "${RSYNC_OPTS[@]}" \
 # ===============================
 # CLEANUP EMPTY DIRECTORIES
 # ===============================
-echo "Removing empty directories from source..."
-find "$SRC_DIR" -type d -empty -delete
+echo "Removing empty subdirectories from source (keeping root)..."
+find "$SRC_DIR" -mindepth 1 -type d -empty -delete
 
 echo "========================================"
 echo " Sync completed successfully"
