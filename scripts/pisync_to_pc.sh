@@ -7,7 +7,7 @@ set -Eeuo pipefail
 SRC_DIR="/mnt/orion-nas/users/ruchi_realme/Camera/"
 DEST_USER="pkaga"
 DEST_HOST="192.168.50.2"
-DEST_DIR="D:\\pisync\\inbound"
+DEST_DIR="/d/pisync/inbound"
 
 LOG_DIR="/var/log/pisynctopc"
 TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
