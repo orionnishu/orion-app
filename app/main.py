@@ -6,6 +6,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import subprocess
 import secrets
 import sqlite3
+import os
+import subprocess
+from fastapi import Query
 
 app = FastAPI(title="Orion Home Server")
 
@@ -16,6 +19,7 @@ security = HTTPBasic()
 
 USERNAME = "orion"
 PASSWORD = "orion1812"   # CHANGE THIS
+ADMIN_LOG_PATH = "/var/log/orion-admin.log"
 
 def is_login_blocked(ip: str, username: str) -> bool:
     now = int(time.time())
@@ -190,3 +194,19 @@ def load_1m_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/fan-rpm", response_class=JSONResponse)
 def fan_rpm_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("fan_rpm", window)
+
+@app.get("/api/admin/logs")
+def get_admin_logs(lines: int = Query(1000, ge=1, le=5000)):
+    """
+    Read last N lines from the unified admin log.
+    Used by Admin UI bottom panel.
+    """
+    if not os.path.exists(ADMIN_LOG_PATH):
+        return ""
+
+    try:
+        with open(ADMIN_LOG_PATH, "r") as f:
+            return "".join(f.readlines()[-lines:])
+    except Exception as e:
+        return f"[LOG READ ERROR] {e}\n"
+
