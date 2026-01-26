@@ -9,6 +9,8 @@ import sqlite3
 import os
 import subprocess
 from fastapi import Query
+from pathlib import Path
+from typing import List
 
 app = FastAPI(title="Orion Home Server")
 
