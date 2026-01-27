@@ -10,44 +10,11 @@
 
 <div id="actions"></div>
 
-{% if message %}
-<p><strong>{{ message }}</strong></p>
-{% endif %}
+<!-- NEW: Sticky Log Panel -->
+<div id="log-panel">
+  <pre id="log-content">Waiting for logs...</pre>
+</div>
 
-<script>
-async function refreshStatus() {
-  const res = await fetch("/api/pc-status");
-  const data = await res.json();
-
-  const statusEl = document.getElementById("pc-status");
-  const actionsEl = document.getElementById("actions");
-
-  actionsEl.innerHTML = "";
-
-  if (data.online) {
-    statusEl.textContent = "Online";
-    statusEl.style.color = "green";
-
-    actionsEl.innerHTML = `
-      <form method="post" action="/admin/sleep-pc">
-        <button type="submit">Sleep Windows PC</button>
-      </form>
-    `;
-  } else {
-    statusEl.textContent = "Offline";
-    statusEl.style.color = "red";
-
-    actionsEl.innerHTML = `
-      <form method="post" action="/admin/wake-pc">
-        <button type="submit">Wake Windows PC</button>
-      </form>
-    `;
-  }
-}
-
-refreshStatus();
-setInterval(refreshStatus, 10000);
-</script>
-
+<!-- Existing JS include -->
+<script src="/static/admin.js"></script>
 {% endblock %}
-
