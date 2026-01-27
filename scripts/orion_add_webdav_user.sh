@@ -4,8 +4,9 @@ set -Eeuo pipefail
 # ===============================
 # CONFIG
 # ===============================
-LOG_DIR="/var/log/orion"
-LOG_FILE="$LOG_DIR/webdav_users.log"
+#LOG_DIR="/var/log/orion"
+#LOG_FILE="$LOG_DIR/webdav_users.log"
+LOG_FILE="/var/log/orion/admin-actions.log
 
 BASE_DIR="/mnt/orion-nas/users"
 HTPASSWD_FILE="/etc/nginx/dav/users.htpasswd"
@@ -15,7 +16,7 @@ NGINX_USER="www-data"
 # ===============================
 # LOGGING
 # ===============================
-mkdir -p "$LOG_DIR"
+#mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "========================================"
