@@ -1,3 +1,7 @@
+/* =================================================
+   Base layout styles (EXISTING — UNCHANGED)
+================================================= */
+
 body {
     font-family: system-ui, sans-serif;
     margin: 0;
@@ -28,4 +32,47 @@ footer {
     text-align: center;
     padding: 1rem;
     color: #6b7280;
+}
+
+/* =================================================
+   Admin Page Enhancements (NEW — APPENDED)
+   Purpose:
+   - Sticky bottom log panel
+   - Preserve existing layout
+================================================= */
+
+/* Make space for sticky log panel */
+body {
+    margin-bottom: 260px;
+}
+
+/* Admin action buttons */
+#actions button {
+    margin: 5px;
+    padding: 10px 14px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* Sticky bottom admin log panel */
+#log-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 240px;
+    background: #111;
+    color: #0f0;
+    border-top: 2px solid #333;
+    padding: 10px;
+    z-index: 1000;
+}
+
+/* Log text styling */
+#log-content {
+    height: 100%;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: monospace;
+    font-size: 12px;
 }
