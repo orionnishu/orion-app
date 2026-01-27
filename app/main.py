@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -138,6 +138,54 @@ def sleep_pc(request: Request, user: str = Depends(authenticate)):
 @app.get("/api/pc-status", response_class=JSONResponse)
 def pc_status(user: str = Depends(authenticate)):
     return {"online": is_pc_online()}
+
+# ------------------------------------------------------------------
+# NEW: Unified Admin Log Reader (READ-ONLY)
+# ------------------------------------------------------------------
+# Purpose:
+# - Read last N lines from the unified admin log file
+# - No parsing, no execution, no side effects
+# - Used by Admin UI log panel (polling every ~2s)
+#
+# Design strictly follows:
+# "Scripts are the source of truth.
+#  FastAPI is just a window."
+# ------------------------------------------------------------------
+
+ADMIN_LOG_FILE = Path("/var/log/orion/admin-actions.log")
+
+@app.get("/admin/logs", response_class=JSONResponse)
+def read_admin_logs(
+    lines: int = Query(500, ge=10, le=5000),
+    user: str = Depends(authenticate)
+):
+    """
+    Read last N lines from the unified admin log file.
+
+    - Append-only log
+    - Raw text returned
+    - UI decides rendering
+    """
+
+    if not ADMIN_LOG_FILE.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Admin log file not found"
+        )
+
+    try:
+        with ADMIN_LOG_FILE.open("r", encoding="utf-8", errors="replace") as f:
+            last_lines = deque(f, maxlen=lines)
+
+        return {
+            "lines": "".join(last_lines)
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 # --------------------
 # Metrics / Dashboard APIs
