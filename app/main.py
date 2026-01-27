@@ -6,11 +6,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import subprocess
 import secrets
 import sqlite3
-import os
-import subprocess
-from fastapi import Query
+import time
 from pathlib import Path
-from typing import List
+from collections import deque
 
 app = FastAPI(title="Orion Home Server")
 
@@ -21,32 +19,6 @@ security = HTTPBasic()
 
 USERNAME = "orion"
 PASSWORD = "orion1812"   # CHANGE THIS
-ADMIN_LOG_PATH = "/var/log/orion-admin.log"
-
-def is_login_blocked(ip: str, username: str) -> bool:
-    now = int(time.time())
-    window_start = now - 600
-
-    q = """
-    SELECT COUNT(*)
-    FROM login_attempts
-    WHERE ip = ?
-      AND username = ?
-      AND success = 0
-      AND ts >= ?
-    """
-    cnt = db.execute(q, (ip, username, window_start)).fetchone()[0]
-    return cnt >= 5
-
-def record_login_attempt(ip, username, success):
-    db.execute(
-        """
-        INSERT INTO login_attempts (ts, ip, username, success)
-        VALUES (?, ?, ?, ?)
-        """,
-        (int(time.time()), ip, username, int(success))
-    )
-    db.commit()
 
 def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     correct_username = secrets.compare_digest(credentials.username, USERNAME)
@@ -81,7 +53,7 @@ def is_pc_online() -> bool:
     return result.returncode == 0
 
 # --------------------
-# Routes (AUTH PROTECTED)
+# UI Routes (HTML only)
 # --------------------
 
 @app.get("/", response_class=HTMLResponse)
@@ -109,47 +81,37 @@ def admin(request: Request, user: str = Depends(authenticate)):
         }
     )
 
-@app.post("/admin/wake-pc", response_class=HTMLResponse)
-def wake_pc(request: Request, user: str = Depends(authenticate)):
-    subprocess.run(["wakemypc"])
-    return templates.TemplateResponse(
-        "admin.html",
-        {
-            "request": request,
-            "title": "Admin",
-            "pc_online": False,
-            "message": "Wake signal sent"
-        }
-    )
+# ------------------------------------------------------------------
+# JSON Admin Trigger Endpoints (ASYNC, NO PAGE RELOAD)
+# ------------------------------------------------------------------
 
-@app.post("/admin/sleep-pc", response_class=HTMLResponse)
-def sleep_pc(request: Request, user: str = Depends(authenticate)):
-    subprocess.run(["sleepmypc"])
-    return templates.TemplateResponse(
-        "admin.html",
-        {
-            "request": request,
-            "title": "Admin",
-            "pc_online": True,
-            "message": "Sleep command sent"
-        }
-    )
+@app.post("/admin/api/wake-pc", response_class=JSONResponse)
+def api_wake_pc(user: str = Depends(authenticate)):
+    subprocess.Popen(["wakemypc"])
+    return {"status": "ok", "action": "wake-pc"}
 
-@app.get("/api/pc-status", response_class=JSONResponse)
-def pc_status(user: str = Depends(authenticate)):
-    return {"online": is_pc_online()}
+@app.post("/admin/api/sleep-pc", response_class=JSONResponse)
+def api_sleep_pc(user: str = Depends(authenticate)):
+    subprocess.Popen(["sleepmypc"])
+    return {"status": "ok", "action": "sleep-pc"}
+
+@app.post("/admin/api/pisync", response_class=JSONResponse)
+def api_pi_sync(user: str = Depends(authenticate)):
+    subprocess.Popen(["pisync_to_pc.sh"])
+    return {"status": "ok", "action": "pi-sync"}
+
+@app.post("/admin/api/deploy", response_class=JSONResponse)
+def api_deploy(user: str = Depends(authenticate)):
+    subprocess.Popen(["deploy.sh"])
+    return {"status": "ok", "action": "deploy"}
+
+@app.post("/admin/api/webdav/provision", response_class=JSONResponse)
+def api_webdav_provision(user: str = Depends(authenticate)):
+    subprocess.Popen(["orion_add_webdav_user.sh"])
+    return {"status": "ok", "action": "webdav-provision"}
 
 # ------------------------------------------------------------------
-# NEW: Unified Admin Log Reader (READ-ONLY)
-# ------------------------------------------------------------------
-# Purpose:
-# - Read last N lines from the unified admin log file
-# - No parsing, no execution, no side effects
-# - Used by Admin UI log panel (polling every ~2s)
-#
-# Design strictly follows:
-# "Scripts are the source of truth.
-#  FastAPI is just a window."
+# Unified Admin Log Reader (READ-ONLY)
 # ------------------------------------------------------------------
 
 ADMIN_LOG_FILE = Path("/var/log/orion/admin-actions.log")
@@ -159,33 +121,13 @@ def read_admin_logs(
     lines: int = Query(500, ge=10, le=5000),
     user: str = Depends(authenticate)
 ):
-    """
-    Read last N lines from the unified admin log file.
-
-    - Append-only log
-    - Raw text returned
-    - UI decides rendering
-    """
-
     if not ADMIN_LOG_FILE.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Admin log file not found"
-        )
+        raise HTTPException(status_code=404, detail="Admin log file not found")
 
-    try:
-        with ADMIN_LOG_FILE.open("r", encoding="utf-8", errors="replace") as f:
-            last_lines = deque(f, maxlen=lines)
+    with ADMIN_LOG_FILE.open("r", encoding="utf-8", errors="replace") as f:
+        last_lines = deque(f, maxlen=lines)
 
-        return {
-            "lines": "".join(last_lines)
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+    return {"lines": "".join(last_lines)}
 
 # --------------------
 # Metrics / Dashboard APIs
@@ -202,11 +144,6 @@ WINDOW_MAP = {
 }
 
 def _metric_series(metric_name: str, window: str):
-    """
-    Fetch metric data for a given time window.
-    Time calculation is handled entirely by SQLite (localtime).
-    """
-
     if window not in WINDOW_MAP:
         window = "24h"
 
@@ -244,19 +181,3 @@ def load_1m_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/fan-rpm", response_class=JSONResponse)
 def fan_rpm_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("fan_rpm", window)
-
-@app.get("/api/admin/logs")
-def get_admin_logs(lines: int = Query(1000, ge=1, le=5000)):
-    """
-    Read last N lines from the unified admin log.
-    Used by Admin UI bottom panel.
-    """
-    if not os.path.exists(ADMIN_LOG_PATH):
-        return ""
-
-    try:
-        with open(ADMIN_LOG_PATH, "r") as f:
-            return "".join(f.readlines()[-lines:])
-    except Exception as e:
-        return f"[LOG READ ERROR] {e}\n"
-
