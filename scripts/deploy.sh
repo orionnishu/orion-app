@@ -8,7 +8,7 @@ APP_DIR="$HOME/server"
 SERVICE_NAME="orion-webapp.service"
 #LOG_DIR="/var/log/orion"
 #LOG_FILE="$LOG_DIR/deploy.log"
-LOG_FILE="/var/log/orion/admin-actions.log
+LOG_FILE="/var/log/orion/admin-actions.log"
 
 AUTO_YES=false
 if [[ "${1:-}" == "--yes" ]]; then
