@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # ===============================
 #LOG_DIR="/var/log/orion"
 #LOG_FILE="$LOG_DIR/webdav_users.log"
-LOG_FILE="/var/log/orion/admin-actions.log
+LOG_FILE="/var/log/orion/admin-actions.log"
 
 BASE_DIR="/mnt/orion-nas/users"
 HTPASSWD_FILE="/etc/nginx/dav/users.htpasswd"

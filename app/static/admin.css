@@ -59,6 +59,56 @@
   color: white;
 }
 
+/* Provision Form */
+.provision-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 400px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-row label {
+  min-width: 90px;
+  font-weight: 500;
+}
+
+.form-row input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.form-row input:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+#provision-status {
+  margin-left: 0.5rem;
+  font-weight: 500;
+}
+
+/* Resize Handle */
+.resize-handle {
+  height: 6px;
+  background: #444;
+  cursor: ns-resize;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover {
+  background: #666;
+}
+
 /* Sticky Log Panel */
 .log-panel {
   position: fixed;
@@ -72,15 +122,16 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
   transition: height 0.3s ease;
 }
 
 .log-panel.collapsed {
-  height: 40px;
+  height: 40px !important;
 }
 
-.log-panel.collapsed #log-content {
+.log-panel.collapsed #log-content,
+.log-panel.collapsed .resize-handle {
   display: none;
 }
 

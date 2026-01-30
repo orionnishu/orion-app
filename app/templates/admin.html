@@ -18,79 +18,163 @@
   <div class="button-group">
     <button class="btn" onclick="runAction('deploy')">🚀 Deploy</button>
     <button class="btn" onclick="runAction('pisync')">📁 Pi Sync</button>
-    <button class="btn" onclick="runAction('webdav/provision')">👤 Add WebDAV User</button>
   </div>
+</div>
+
+<div class="admin-section">
+  <h3>👤 WebDAV User Provisioning</h3>
+  <form id="webdav-form" class="provision-form" onsubmit="provisionWebDAVUser(event)">
+    <div class="form-row">
+      <label for="webdav-username">Username:</label>
+      <input type="text" id="webdav-username" name="username" placeholder="e.g. john_phone" required
+        pattern="[a-zA-Z0-9_]+" title="Alphanumeric and underscores only">
+    </div>
+    <div class="form-row">
+      <label for="webdav-password">Password:</label>
+      <input type="password" id="webdav-password" name="password" required>
+    </div>
+    <div class="form-row">
+      <button type="submit" class="btn btn-success">➕ Create User</button>
+      <span id="provision-status"></span>
+    </div>
+  </form>
 </div>
 
 <!-- Sticky Log Panel -->
 <div id="log-panel" class="log-panel">
+  <div class="resize-handle" id="resize-handle"></div>
   <div class="log-header">
     <span>📋 Admin Log</span>
     <button class="btn-small" onclick="refreshLogs()">🔄 Refresh</button>
-    <button class="btn-small" onclick="toggleLogPanel()">▼</button>
+    <button class="btn-small" id="toggle-btn" onclick="toggleLogPanel()">▼</button>
   </div>
   <pre id="log-content">Loading logs...</pre>
 </div>
 
 <script>
-// PC Status
-async function refreshStatus() {
-  try {
-    const res = await fetch("/api/pc-status");
-    const data = await res.json();
+  // PC Status
+  async function refreshStatus() {
+    try {
+      const res = await fetch("/api/pc-status");
+      const data = await res.json();
 
-    const statusEl = document.getElementById("pc-status");
-    const actionsEl = document.getElementById("pc-actions");
+      const statusEl = document.getElementById("pc-status");
+      const actionsEl = document.getElementById("pc-actions");
 
-    if (data.online) {
-      statusEl.textContent = "Online";
-      statusEl.style.color = "#4caf50";
-      actionsEl.innerHTML = `<button class="btn btn-warn" onclick="runAction('sleep-pc')">😴 Sleep PC</button>`;
-    } else {
-      statusEl.textContent = "Offline";
-      statusEl.style.color = "#f44336";
-      actionsEl.innerHTML = `<button class="btn btn-success" onclick="runAction('wake-pc')">⚡ Wake PC</button>`;
+      if (data.online) {
+        statusEl.textContent = "Online";
+        statusEl.style.color = "#4caf50";
+        actionsEl.innerHTML = `<button class="btn btn-warn" onclick="runAction('sleep-pc')">😴 Sleep PC</button>`;
+      } else {
+        statusEl.textContent = "Offline";
+        statusEl.style.color = "#f44336";
+        actionsEl.innerHTML = `<button class="btn btn-success" onclick="runAction('wake-pc')">⚡ Wake PC</button>`;
+      }
+    } catch (e) {
+      console.error("Status check failed", e);
     }
-  } catch (e) {
-    console.error("Status check failed", e);
   }
-}
 
-// Run Action
-async function runAction(action) {
-  try {
-    const res = await fetch(`/admin/api/${action}`, { method: 'POST' });
-    const data = await res.json();
-    console.log("Action result:", data);
-    setTimeout(refreshLogs, 500);
-  } catch (e) {
-    console.error("Action failed", e);
+  // Run Action
+  async function runAction(action) {
+    try {
+      const res = await fetch(`/admin/api/${action}`, { method: 'POST' });
+      const data = await res.json();
+      console.log("Action result:", data);
+      setTimeout(refreshLogs, 500);
+    } catch (e) {
+      console.error("Action failed", e);
+    }
   }
-}
 
-// Log Panel
-async function refreshLogs() {
-  try {
-    const res = await fetch('/admin/logs?lines=1000');
-    const data = await res.json();
-    const logContent = document.getElementById('log-content');
-    logContent.textContent = data.lines;
-    logContent.scrollTop = logContent.scrollHeight;
-  } catch (e) {
-    document.getElementById('log-content').textContent = "Error loading logs";
+  // WebDAV User Provisioning
+  async function provisionWebDAVUser(event) {
+    event.preventDefault();
+    const statusEl = document.getElementById('provision-status');
+    const form = document.getElementById('webdav-form');
+    const formData = new FormData(form);
+
+    statusEl.textContent = '⏳ Creating...';
+    statusEl.style.color = '#ff9800';
+
+    try {
+      const res = await fetch('/admin/api/webdav/provision', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        statusEl.textContent = `✅ User "${data.username}" created!`;
+        statusEl.style.color = '#4caf50';
+        form.reset();
+      } else {
+        statusEl.textContent = `❌ ${data.detail}`;
+        statusEl.style.color = '#f44336';
+      }
+      setTimeout(refreshLogs, 500);
+    } catch (e) {
+      statusEl.textContent = '❌ Request failed';
+      statusEl.style.color = '#f44336';
+      console.error("Provision failed", e);
+    }
   }
-}
 
-function toggleLogPanel() {
-  const panel = document.getElementById('log-panel');
-  panel.classList.toggle('collapsed');
-}
+  // Log Panel
+  async function refreshLogs() {
+    try {
+      const res = await fetch('/admin/logs?lines=1000');
+      const data = await res.json();
+      const logContent = document.getElementById('log-content');
+      logContent.textContent = data.lines;
+      logContent.scrollTop = logContent.scrollHeight;
+    } catch (e) {
+      document.getElementById('log-content').textContent = "Error loading logs";
+    }
+  }
 
-// Init
-refreshStatus();
-refreshLogs();
-setInterval(refreshStatus, 10000);
-setInterval(refreshLogs, 30000);
+  function toggleLogPanel() {
+    const panel = document.getElementById('log-panel');
+    const toggleBtn = document.getElementById('toggle-btn');
+    panel.classList.toggle('collapsed');
+
+    if (panel.classList.contains('collapsed')) {
+      toggleBtn.textContent = '▲';
+    } else {
+      toggleBtn.textContent = '▼';
+      panel.style.height = '220px'; // Reset to default height
+    }
+  }
+
+  // Resize handler (lightweight, no library)
+  const resizeHandle = document.getElementById('resize-handle');
+  const logPanel = document.getElementById('log-panel');
+  let isResizing = false;
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    document.body.style.cursor = 'ns-resize';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const newHeight = window.innerHeight - e.clientY;
+    if (newHeight > 80 && newHeight < window.innerHeight * 0.8) {
+      logPanel.style.height = newHeight + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    isResizing = false;
+    document.body.style.cursor = '';
+  });
+
+  // Init
+  refreshStatus();
+  refreshLogs();
+  setInterval(refreshStatus, 10000);
+  setInterval(refreshLogs, 30000);
 </script>
 
 {% endblock %}

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -111,9 +111,25 @@ def api_deploy(user: str = Depends(authenticate)):
     return {"status": "ok", "action": "deploy"}
 
 @app.post("/admin/api/webdav/provision", response_class=JSONResponse)
-def api_webdav_provision(user: str = Depends(authenticate)):
-    subprocess.Popen([str(SCRIPTS_DIR / "orion_add_webdav_user.sh")])
-    return {"status": "ok", "action": "webdav-provision"}
+def api_webdav_provision(
+    username: str = Form(...),
+    password: str = Form(...),
+    user: str = Depends(authenticate)
+):
+    # Validate input
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    
+    if not username.isalnum() and "_" not in username:
+        raise HTTPException(status_code=400, detail="Username must be alphanumeric (underscores allowed)")
+    
+    # Run script with password as environment variable
+    env = {"ORION_WEBDAV_PASSWORD": password, "PATH": "/usr/bin:/bin"}
+    subprocess.Popen(
+        ["sudo", "-E", str(SCRIPTS_DIR / "orion_add_webdav_user.sh"), username],
+        env=env
+    )
+    return {"status": "ok", "action": "webdav-provision", "username": username}
 
 # ------------------------------------------------------------------
 # Unified Admin Log Reader (READ-ONLY)
