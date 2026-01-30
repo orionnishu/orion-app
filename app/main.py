@@ -7,10 +7,14 @@ import subprocess
 import secrets
 import sqlite3
 import time
+import os
 from pathlib import Path
 from collections import deque
 
-app = FastAPI(title="Orion Home Server")
+# Support for being served under a subpath (e.g., /app via Tailscale)
+ROOT_PATH = os.environ.get("ROOT_PATH", "")
+
+app = FastAPI(title="Orion Home Server", root_path=ROOT_PATH)
 
 # --------------------
 # Auth config

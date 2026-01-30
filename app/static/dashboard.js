@@ -1,6 +1,7 @@
 // --------------------
 // Globals
 // --------------------
+const BASE_PATH = window.BASE_PATH || '';
 let cpuTempChart;
 let ramChart;
 let loadChart;
@@ -185,7 +186,7 @@ async function updateChart(chart, endpoint, metricName, valueId) {
 // --------------------
 async function updateStorage() {
   try {
-    const res = await fetch('/api/storage/status');
+    const res = await fetch(BASE_PATH + '/api/storage/status');
     const disks = await res.json();
     const grid = document.getElementById('storage-grid');
 
@@ -229,10 +230,10 @@ async function updateStorage() {
 // Refresh all data
 // --------------------
 function refreshAll() {
-  updateChart(cpuTempChart, "/api/metrics/cpu-temp", "cpu_temp", "val-cpu-temp");
-  updateChart(ramChart, "/api/metrics/ram-used", "ram_used", "val-ram-used");
-  updateChart(loadChart, "/api/metrics/load-1m", "load_1m", "val-load-1m");
-  updateChart(fanChart, "/api/metrics/fan-rpm", "fan_rpm", "val-fan-rpm");
+  updateChart(cpuTempChart, BASE_PATH + "/api/metrics/cpu-temp", "cpu_temp", "val-cpu-temp");
+  updateChart(ramChart, BASE_PATH + "/api/metrics/ram-used", "ram_used", "val-ram-used");
+  updateChart(loadChart, BASE_PATH + "/api/metrics/load-1m", "load_1m", "val-load-1m");
+  updateChart(fanChart, BASE_PATH + "/api/metrics/fan-rpm", "fan_rpm", "val-fan-rpm");
   updateStorage();
 
   const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
