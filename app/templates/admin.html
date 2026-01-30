@@ -8,46 +8,89 @@
   <strong id="pc-status">Checking...</strong>
 </p>
 
-<div id="actions"></div>
+<div class="admin-section">
+  <h3>PC Power</h3>
+  <div class="button-group" id="pc-actions"></div>
+</div>
 
-{% if message %}
-<p><strong>{{ message }}</strong></p>
-{% endif %}
+<div class="admin-section">
+  <h3>Server Actions</h3>
+  <div class="button-group">
+    <button class="btn" onclick="runAction('deploy')">🚀 Deploy</button>
+    <button class="btn" onclick="runAction('pisync')">📁 Pi Sync</button>
+    <button class="btn" onclick="runAction('webdav/provision')">👤 Add WebDAV User</button>
+  </div>
+</div>
+
+<!-- Sticky Log Panel -->
+<div id="log-panel" class="log-panel">
+  <div class="log-header">
+    <span>📋 Admin Log</span>
+    <button class="btn-small" onclick="refreshLogs()">🔄 Refresh</button>
+    <button class="btn-small" onclick="toggleLogPanel()">▼</button>
+  </div>
+  <pre id="log-content">Loading logs...</pre>
+</div>
 
 <script>
+// PC Status
 async function refreshStatus() {
-  const res = await fetch("/api/pc-status");
-  const data = await res.json();
+  try {
+    const res = await fetch("/api/pc-status");
+    const data = await res.json();
 
-  const statusEl = document.getElementById("pc-status");
-  const actionsEl = document.getElementById("actions");
+    const statusEl = document.getElementById("pc-status");
+    const actionsEl = document.getElementById("pc-actions");
 
-  actionsEl.innerHTML = "";
-
-  if (data.online) {
-    statusEl.textContent = "Online";
-    statusEl.style.color = "green";
-
-    actionsEl.innerHTML = `
-      <form method="post" action="/admin/sleep-pc">
-        <button type="submit">Sleep Windows PC</button>
-      </form>
-    `;
-  } else {
-    statusEl.textContent = "Offline";
-    statusEl.style.color = "red";
-
-    actionsEl.innerHTML = `
-      <form method="post" action="/admin/wake-pc">
-        <button type="submit">Wake Windows PC</button>
-      </form>
-    `;
+    if (data.online) {
+      statusEl.textContent = "Online";
+      statusEl.style.color = "#4caf50";
+      actionsEl.innerHTML = `<button class="btn btn-warn" onclick="runAction('sleep-pc')">😴 Sleep PC</button>`;
+    } else {
+      statusEl.textContent = "Offline";
+      statusEl.style.color = "#f44336";
+      actionsEl.innerHTML = `<button class="btn btn-success" onclick="runAction('wake-pc')">⚡ Wake PC</button>`;
+    }
+  } catch (e) {
+    console.error("Status check failed", e);
   }
 }
 
+// Run Action
+async function runAction(action) {
+  try {
+    const res = await fetch(`/admin/api/${action}`, { method: 'POST' });
+    const data = await res.json();
+    console.log("Action result:", data);
+    setTimeout(refreshLogs, 500);
+  } catch (e) {
+    console.error("Action failed", e);
+  }
+}
+
+// Log Panel
+async function refreshLogs() {
+  try {
+    const res = await fetch('/admin/logs?lines=1000');
+    const data = await res.json();
+    const logContent = document.getElementById('log-content');
+    logContent.textContent = data.lines;
+    logContent.scrollTop = logContent.scrollHeight;
+  } catch (e) {
+    document.getElementById('log-content').textContent = "Error loading logs";
+  }
+}
+
+function toggleLogPanel() {
+  const panel = document.getElementById('log-panel');
+  panel.classList.toggle('collapsed');
+}
+
+// Init
 refreshStatus();
+refreshLogs();
 setInterval(refreshStatus, 10000);
+setInterval(refreshLogs, 30000);
 </script>
 
 {% endblock %}
-

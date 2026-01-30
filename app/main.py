@@ -43,6 +43,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # PC config
 # --------------------
 PC_IP = "192.168.50.2"
+SCRIPTS_DIR = Path("/home/orion/server/scripts")
 
 def is_pc_online() -> bool:
     result = subprocess.run(
@@ -51,6 +52,10 @@ def is_pc_online() -> bool:
         stderr=subprocess.DEVNULL
     )
     return result.returncode == 0
+
+@app.get("/api/pc-status", response_class=JSONResponse)
+def pc_status():
+    return {"online": is_pc_online()}
 
 # --------------------
 # UI Routes (HTML only)
@@ -87,27 +92,27 @@ def admin(request: Request, user: str = Depends(authenticate)):
 
 @app.post("/admin/api/wake-pc", response_class=JSONResponse)
 def api_wake_pc(user: str = Depends(authenticate)):
-    subprocess.Popen(["wakemypc"])
+    subprocess.Popen([str(SCRIPTS_DIR / "wakemypc.sh")])
     return {"status": "ok", "action": "wake-pc"}
 
 @app.post("/admin/api/sleep-pc", response_class=JSONResponse)
 def api_sleep_pc(user: str = Depends(authenticate)):
-    subprocess.Popen(["sleepmypc"])
+    subprocess.Popen([str(SCRIPTS_DIR / "sleepmypc.sh")])
     return {"status": "ok", "action": "sleep-pc"}
 
 @app.post("/admin/api/pisync", response_class=JSONResponse)
 def api_pi_sync(user: str = Depends(authenticate)):
-    subprocess.Popen(["pisync_to_pc.sh"])
+    subprocess.Popen([str(SCRIPTS_DIR / "pisync_to_pc.sh")])
     return {"status": "ok", "action": "pi-sync"}
 
 @app.post("/admin/api/deploy", response_class=JSONResponse)
 def api_deploy(user: str = Depends(authenticate)):
-    subprocess.Popen(["deploy.sh"])
+    subprocess.Popen([str(SCRIPTS_DIR / "deploy.sh"), "--yes"])
     return {"status": "ok", "action": "deploy"}
 
 @app.post("/admin/api/webdav/provision", response_class=JSONResponse)
 def api_webdav_provision(user: str = Depends(authenticate)):
-    subprocess.Popen(["orion_add_webdav_user.sh"])
+    subprocess.Popen([str(SCRIPTS_DIR / "orion_add_webdav_user.sh")])
     return {"status": "ok", "action": "webdav-provision"}
 
 # ------------------------------------------------------------------
