@@ -84,6 +84,13 @@
 - [x] L3. Re-configure cron jobs for stats & archival
 - [x] L4. Verify dashboard charts rendering
 
+### Category M: Admin Script Execution (NEW)
+- [x] M1. Fix script paths in main.py to use absolute paths
+- [x] M2. Add PC status API endpoint
+- [x] M3. Create admin.html with action buttons
+- [x] M4. Create admin.css with log panel styling
+- [x] M5. Verify admin page functionality
+
 ---
 
 ## Status Summary
@@ -102,3 +109,4 @@
 | J. Cleanup | 🔶 Partial |
 | K. Integration | ✅ Complete |
 | L. Pi-Monitor | ✅ Complete |
+| M. Admin Scripts | ✅ Complete |
