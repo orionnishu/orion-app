@@ -132,6 +132,66 @@ def api_webdav_provision(
     return {"status": "ok", "action": "webdav-provision", "username": username}
 
 # ------------------------------------------------------------------
+# WebDAV User Management
+# ------------------------------------------------------------------
+
+HTPASSWD_FILE = Path("/etc/nginx/dav/users.htpasswd")
+WEBDAV_BASE_DIR = Path("/mnt/orion-nas/users")
+
+@app.get("/admin/api/webdav/users", response_class=JSONResponse)
+def list_webdav_users(user: str = Depends(authenticate)):
+    """List all WebDAV users with folder stats"""
+    users = []
+    
+    # Read htpasswd file
+    if HTPASSWD_FILE.exists():
+        with open(HTPASSWD_FILE, "r") as f:
+            for line in f:
+                if ":" in line:
+                    username = line.split(":")[0].strip()
+                    user_data = {"username": username, "file_count": None, "size": None}
+                    
+                    # Get folder stats if exists
+                    user_dir = WEBDAV_BASE_DIR / username
+                    if user_dir.exists():
+                        try:
+                            result = subprocess.run(
+                                ["du", "-sh", str(user_dir)],
+                                capture_output=True, text=True, timeout=5
+                            )
+                            if result.returncode == 0:
+                                user_data["size"] = result.stdout.split()[0]
+                            
+                            result = subprocess.run(
+                                ["find", str(user_dir), "-type", "f"],
+                                capture_output=True, text=True, timeout=10
+                            )
+                            if result.returncode == 0:
+                                user_data["file_count"] = len(result.stdout.strip().split("\n")) if result.stdout.strip() else 0
+                        except Exception:
+                            pass
+                    
+                    users.append(user_data)
+    
+    return users
+
+@app.delete("/admin/api/webdav/users/{username}", response_class=JSONResponse)
+def delete_webdav_user(
+    username: str,
+    delete_data: bool = Query(True),
+    user: str = Depends(authenticate)
+):
+    """Delete a WebDAV user"""
+    # Run delete script
+    subprocess.Popen([
+        "sudo", str(SCRIPTS_DIR / "orion_delete_webdav_user.sh"),
+        username,
+        "--delete-data" if delete_data else "--keep-data"
+    ])
+    
+    return {"status": "ok", "action": "delete-user", "username": username, "data_deleted": delete_data}
+
+# ------------------------------------------------------------------
 # Unified Admin Log Reader (READ-ONLY)
 # ------------------------------------------------------------------
 

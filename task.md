@@ -84,12 +84,15 @@
 - [x] L3. Re-configure cron jobs for stats & archival
 - [x] L4. Verify dashboard charts rendering
 
-### Category M: Admin Script Execution (NEW)
+### Category M: Admin Page & User Management
 - [x] M1. Fix script paths in main.py to use absolute paths
 - [x] M2. Add PC status API endpoint
-- [x] M3. Create admin.html with action buttons
-- [x] M4. Create admin.css with log panel styling
-- [x] M5. Verify admin page functionality
+- [x] M3. Create tabbed Admin interface (System, Users, Logs)
+- [x] M4. Add WebDAV user listing with stats (file count, size)
+- [x] M5. Add WebDAV user provisioning form
+- [x] M6. Add user delete functionality with data retention option
+- [x] M7. Create orion_delete_webdav_user.sh script
+- [x] M8. Professional minimal styling (admin.css)
 
 ---
 
@@ -109,4 +112,4 @@
 | J. Cleanup | 🔶 Partial |
 | K. Integration | ✅ Complete |
 | L. Pi-Monitor | ✅ Complete |
-| M. Admin Scripts | ✅ Complete |
+| M. Admin & Users | ✅ Complete |

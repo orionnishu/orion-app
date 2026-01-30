@@ -1,74 +1,118 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Admin Controls</h2>
+<div class="admin-container">
+  <h2>Admin Console</h2>
 
-<p>
-  PC Status:
-  <strong id="pc-status">Checking...</strong>
-</p>
+  <!-- Tab Navigation -->
+  <nav class="admin-tabs">
+    <button class="tab-btn active" onclick="showTab('system')">System</button>
+    <button class="tab-btn" onclick="showTab('users')">Users</button>
+    <button class="tab-btn" onclick="showTab('logs')">Logs</button>
+  </nav>
 
-<div class="admin-section">
-  <h3>PC Power</h3>
-  <div class="button-group" id="pc-actions"></div>
+  <!-- System Tab -->
+  <section id="tab-system" class="tab-content active">
+    <div class="card">
+      <h3>PC Control</h3>
+      <div class="status-row">
+        <span>Status:</span>
+        <strong id="pc-status">Checking...</strong>
+      </div>
+      <div class="action-row" id="pc-actions"></div>
+    </div>
+
+    <div class="card">
+      <h3>Server Actions</h3>
+      <div class="action-row">
+        <button class="btn" onclick="runAction('deploy')">
+          <span class="icon">🚀</span> Deploy
+        </button>
+        <button class="btn" onclick="runAction('pisync')">
+          <span class="icon">📁</span> Pi Sync
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Users Tab -->
+  <section id="tab-users" class="tab-content">
+    <div class="card">
+      <h3>WebDAV Users</h3>
+      <div id="users-list" class="users-table">
+        <div class="loading">Loading users...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Add New User</h3>
+      <form id="webdav-form" class="inline-form" onsubmit="provisionWebDAVUser(event)">
+        <input type="text" id="webdav-username" name="username" placeholder="Username" required pattern="[a-zA-Z0-9_]+">
+        <input type="password" id="webdav-password" name="password" placeholder="Password" required>
+        <button type="submit" class="btn btn-primary">Add User</button>
+        <span id="provision-status"></span>
+      </form>
+    </div>
+  </section>
+
+  <!-- Logs Tab -->
+  <section id="tab-logs" class="tab-content">
+    <div class="card logs-card">
+      <div class="logs-header">
+        <h3>Admin Action Log</h3>
+        <button class="btn btn-sm" onclick="refreshLogs()">Refresh</button>
+      </div>
+      <pre id="log-content" class="log-viewer">Loading logs...</pre>
+    </div>
+  </section>
 </div>
 
-<div class="admin-section">
-  <h3>Server Actions</h3>
-  <div class="button-group">
-    <button class="btn" onclick="runAction('deploy')">🚀 Deploy</button>
-    <button class="btn" onclick="runAction('pisync')">📁 Pi Sync</button>
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Delete User</h3>
+    <p>Are you sure you want to delete user <strong id="delete-username"></strong>?</p>
+    <div class="modal-options">
+      <label>
+        <input type="checkbox" id="delete-data" checked>
+        Also delete user's data folder
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+    </div>
   </div>
-</div>
-
-<div class="admin-section">
-  <h3>👤 WebDAV User Provisioning</h3>
-  <form id="webdav-form" class="provision-form" onsubmit="provisionWebDAVUser(event)">
-    <div class="form-row">
-      <label for="webdav-username">Username:</label>
-      <input type="text" id="webdav-username" name="username" placeholder="e.g. john_phone" required
-        pattern="[a-zA-Z0-9_]+" title="Alphanumeric and underscores only">
-    </div>
-    <div class="form-row">
-      <label for="webdav-password">Password:</label>
-      <input type="password" id="webdav-password" name="password" required>
-    </div>
-    <div class="form-row">
-      <button type="submit" class="btn btn-success">➕ Create User</button>
-      <span id="provision-status"></span>
-    </div>
-  </form>
-</div>
-
-<!-- Sticky Log Panel -->
-<div id="log-panel" class="log-panel">
-  <div class="resize-handle" id="resize-handle"></div>
-  <div class="log-header">
-    <span>📋 Admin Log</span>
-    <button class="btn-small" onclick="refreshLogs()">🔄 Refresh</button>
-    <button class="btn-small" id="toggle-btn" onclick="toggleLogPanel()">▼</button>
-  </div>
-  <pre id="log-content">Loading logs...</pre>
 </div>
 
 <script>
+  // Tab Navigation
+  function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    event.target.classList.add('active');
+
+    if (tabName === 'users') loadUsers();
+    if (tabName === 'logs') refreshLogs();
+  }
+
   // PC Status
   async function refreshStatus() {
     try {
       const res = await fetch("/api/pc-status");
       const data = await res.json();
-
       const statusEl = document.getElementById("pc-status");
       const actionsEl = document.getElementById("pc-actions");
 
       if (data.online) {
         statusEl.textContent = "Online";
-        statusEl.style.color = "#4caf50";
-        actionsEl.innerHTML = `<button class="btn btn-warn" onclick="runAction('sleep-pc')">😴 Sleep PC</button>`;
+        statusEl.className = "status-online";
+        actionsEl.innerHTML = `<button class="btn btn-warn" onclick="runAction('sleep-pc')">Sleep PC</button>`;
       } else {
         statusEl.textContent = "Offline";
-        statusEl.style.color = "#f44336";
-        actionsEl.innerHTML = `<button class="btn btn-success" onclick="runAction('wake-pc')">⚡ Wake PC</button>`;
+        statusEl.className = "status-offline";
+        actionsEl.innerHTML = `<button class="btn btn-success" onclick="runAction('wake-pc')">Wake PC</button>`;
       }
     } catch (e) {
       console.error("Status check failed", e);
@@ -78,12 +122,44 @@
   // Run Action
   async function runAction(action) {
     try {
-      const res = await fetch(`/admin/api/${action}`, { method: 'POST' });
-      const data = await res.json();
-      console.log("Action result:", data);
+      await fetch(`/admin/api/${action}`, { method: 'POST' });
       setTimeout(refreshLogs, 500);
     } catch (e) {
       console.error("Action failed", e);
+    }
+  }
+
+  // Load Users
+  async function loadUsers() {
+    const container = document.getElementById('users-list');
+    try {
+      const res = await fetch('/admin/api/webdav/users');
+      const users = await res.json();
+
+      if (users.length === 0) {
+        container.innerHTML = '<div class="empty">No users configured</div>';
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr><th>Username</th><th>Files</th><th>Size</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            ${users.map(u => `
+              <tr>
+                <td>${u.username}</td>
+                <td>${u.file_count ?? '—'}</td>
+                <td>${u.size ?? '—'}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="showDeleteModal('${u.username}')">Delete</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } catch (e) {
+      container.innerHTML = '<div class="error">Failed to load users</div>';
     }
   }
 
@@ -94,8 +170,8 @@
     const form = document.getElementById('webdav-form');
     const formData = new FormData(form);
 
-    statusEl.textContent = '⏳ Creating...';
-    statusEl.style.color = '#ff9800';
+    statusEl.textContent = 'Creating...';
+    statusEl.className = 'status-pending';
 
     try {
       const res = await fetch('/admin/api/webdav/provision', {
@@ -105,76 +181,69 @@
       const data = await res.json();
 
       if (res.ok) {
-        statusEl.textContent = `✅ User "${data.username}" created!`;
-        statusEl.style.color = '#4caf50';
+        statusEl.textContent = `✓ Created`;
+        statusEl.className = 'status-success';
         form.reset();
+        loadUsers();
       } else {
-        statusEl.textContent = `❌ ${data.detail}`;
-        statusEl.style.color = '#f44336';
+        statusEl.textContent = data.detail;
+        statusEl.className = 'status-error';
       }
-      setTimeout(refreshLogs, 500);
     } catch (e) {
-      statusEl.textContent = '❌ Request failed';
-      statusEl.style.color = '#f44336';
-      console.error("Provision failed", e);
+      statusEl.textContent = 'Failed';
+      statusEl.className = 'status-error';
     }
   }
 
-  // Log Panel
+  // Delete Modal
+  let pendingDeleteUser = null;
+
+  function showDeleteModal(username) {
+    pendingDeleteUser = username;
+    document.getElementById('delete-username').textContent = username;
+    document.getElementById('delete-modal').classList.remove('hidden');
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+    pendingDeleteUser = null;
+  }
+
+  async function confirmDelete() {
+    if (!pendingDeleteUser) return;
+    const deleteData = document.getElementById('delete-data').checked;
+
+    try {
+      const res = await fetch(`/admin/api/webdav/users/${pendingDeleteUser}?delete_data=${deleteData}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        loadUsers();
+        setTimeout(refreshLogs, 500);
+      }
+    } catch (e) {
+      console.error("Delete failed", e);
+    }
+    closeDeleteModal();
+  }
+
+  // Logs
   async function refreshLogs() {
     try {
       const res = await fetch('/admin/logs?lines=1000');
       const data = await res.json();
-      const logContent = document.getElementById('log-content');
-      logContent.textContent = data.lines;
-      logContent.scrollTop = logContent.scrollHeight;
+      const el = document.getElementById('log-content');
+      el.textContent = data.lines;
+      el.scrollTop = el.scrollHeight;
     } catch (e) {
       document.getElementById('log-content').textContent = "Error loading logs";
     }
   }
 
-  function toggleLogPanel() {
-    const panel = document.getElementById('log-panel');
-    const toggleBtn = document.getElementById('toggle-btn');
-    panel.classList.toggle('collapsed');
-
-    if (panel.classList.contains('collapsed')) {
-      toggleBtn.textContent = '▲';
-    } else {
-      toggleBtn.textContent = '▼';
-      panel.style.height = '220px'; // Reset to default height
-    }
-  }
-
-  // Resize handler (lightweight, no library)
-  const resizeHandle = document.getElementById('resize-handle');
-  const logPanel = document.getElementById('log-panel');
-  let isResizing = false;
-
-  resizeHandle.addEventListener('mousedown', (e) => {
-    isResizing = true;
-    document.body.style.cursor = 'ns-resize';
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    const newHeight = window.innerHeight - e.clientY;
-    if (newHeight > 80 && newHeight < window.innerHeight * 0.8) {
-      logPanel.style.height = newHeight + 'px';
-    }
-  });
-
-  document.addEventListener('mouseup', () => {
-    isResizing = false;
-    document.body.style.cursor = '';
-  });
-
   // Init
   refreshStatus();
-  refreshLogs();
   setInterval(refreshStatus, 10000);
-  setInterval(refreshLogs, 30000);
 </script>
 
 {% endblock %}
