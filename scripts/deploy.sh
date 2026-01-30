@@ -5,7 +5,7 @@ set -Eeuo pipefail
 # CONFIG
 # ===============================
 APP_DIR="$HOME/server"
-SERVICE_NAME="orion-server.service"
+SERVICE_NAME="orion-webapp.service"
 #LOG_DIR="/var/log/orion"
 #LOG_FILE="$LOG_DIR/deploy.log"
 LOG_FILE="/var/log/orion/admin-actions.log

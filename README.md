@@ -3,61 +3,32 @@
 ORION is a private, Raspberry Pi–based home server focused on **stability, correctness, and security**.
 
 It combines:
-- FastAPI (admin & dashboard)
-- nginx WebDAV (NAS)
-- Tailscale (secure networking & HTTPS)
-
-This repository is the **authoritative source** for ORION’s code and documentation.
-
----
-
-## What ORION Is
-
-- Hardware: Raspberry Pi 5
-- OS: Ubuntu
-- Network: Tailscale (MagicDNS + Serve)
-- Storage: External USB / HDD mounted at `/mnt/orion-nas`
-- Web App: FastAPI + Uvicorn
-- NAS: nginx WebDAV
-- Android Clients:
-  - FolderSync (supported, primary)
-  - Material Files (supported, browsing)
-
-## What ORION Is Not
-
-- No router port forwarding
-- No public internet exposure
-- No SMB / Samba
-- No unreliable WebDAV clients
+- **FastAPI**: Monitoring Dashboard & Control Plane
+- **nginx WebDAV**: Multi-user NAS
+- **Tailscale**: Secure networking & HTTPS routing
+- **Pi-Monitor**: Internal health & temperature metrics
 
 ---
 
-## Repository Structure
+## Technical Stack
 
-```
-server/
-├── app/                 # FastAPI application
-├── services/
-│   └── webdav/           # WebDAV configs and scripts
-├── scripts/              # Admin / deployment scripts
-├── docs/                 # Architecture & runbooks
-└── README.md
-```
+- **Hardware**: Raspberry Pi 5
+- **OS**: Raspbian 64 Lite (Debian 13)
+- **Network**: Tailscale (MagicDNS + Serve)
+- **Storage**: External USB Disk (EXT4) mounted at `/mnt/orion-nas`
+- **Web App**: FastAPI + Uvicorn (Service: `orion-webapp.service`)
+- **NAS**: nginx with WebDAV Extensions (Port: `8082`)
 
 ---
 
 ## Documentation
 
-- Architecture: `docs/architecture.md`
-- Build & rebuild: `docs/ORION_BUILD_RUNBOOK.md`
-
-These docs reflect the **real, working system** — not experiments.
+- **[Architecture](docs/ARCHITECTURE.md)**: High-level design and component interaction.
+- **[Build Runbook](docs/BUILD_RUNBOOK.md)**: Steps to recreate or restore the entire system.
 
 ---
 
 ## Status
 
-ORION is **stable** and in daily use for private backups.
-Future enhancements are deliberate and incremental.
-
----
+ORION is **stable** and in daily use for private backups and system monitoring.
+The system is configured for high reliability with redundant networking (Local + Tailscale) and automated data archival.

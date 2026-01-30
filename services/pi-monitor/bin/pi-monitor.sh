@@ -28,7 +28,7 @@ RAM_USED=$(/usr/bin/free -m | awk '/Mem:/ {print $3}')
 LOAD=$(/usr/bin/uptime | awk -F'load average:' '{print $2}')
 
 # --- Log ---
-echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM | Load:$LOAD" >> "$LOG_PATH"
+echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD" >> "$LOG_PATH"
 
 # --- DB entry ---
 #DB="/home/orion/Documents/projects/pi-monitor/pi-monitor.db"
