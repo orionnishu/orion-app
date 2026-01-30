@@ -9,12 +9,15 @@ TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
   echo "ACTION: sleepmypc"
   echo "START : $TIMESTAMP"
   echo "========================================"
-} >> "$LOG_FILE"
 
-# ---- Actual action (unchanged behavior) ----
-ssh pkaga@192.168.50.2 "schtasks /run /tn SleepMyPC"
+  # Actual action with output captured
+  echo "Sending sleep command to PC (192.168.50.2)..."
+  if ssh -o ConnectTimeout=5 -o BatchMode=yes pkaga@192.168.50.2 "schtasks /run /tn SleepMyPC" 2>&1; then
+    echo "Sleep command sent successfully."
+  else
+    echo "ERROR: Failed to send sleep command (exit code: $?)"
+  fi
 
-{
   echo "END   : $(date '+%Y-%m-%d %H:%M:%S')"
   echo
 } >> "$LOG_FILE"

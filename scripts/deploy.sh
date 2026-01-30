@@ -8,7 +8,7 @@ APP_DIR="$HOME/server"
 SERVICE_NAME="orion-webapp.service"
 #LOG_DIR="/var/log/orion"
 #LOG_FILE="$LOG_DIR/deploy.log"
-LOG_FILE="/var/log/orion/admin-actions.log
+LOG_FILE="/var/log/orion/admin-actions.log"
 
 AUTO_YES=false
 if [[ "${1:-}" == "--yes" ]]; then
@@ -29,19 +29,20 @@ echo "========================================"
 
 cd "$APP_DIR"
 
-echo "[1/3] Fetching latest code..."
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo "[1/3] Fetching latest code (branch: $CURRENT_BRANCH)..."
 git fetch origin
 git status
 
 if [[ "$AUTO_YES" == false ]]; then
-  read -r -p "Pull latest changes from main? [y/N]: " confirm
+  read -r -p "Pull latest changes from $CURRENT_BRANCH? [y/N]: " confirm
   if [[ "$confirm" != "y" ]]; then
     echo "Aborted by user."
     exit 0
   fi
 fi
 
-git pull origin main
+git pull --ff-only origin "$CURRENT_BRANCH"
 
 echo "[2/3] Restarting service..."
 sudo systemctl restart "$SERVICE_NAME"

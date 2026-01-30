@@ -9,12 +9,15 @@ TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
   echo "ACTION: wakemypc"
   echo "START : $TIMESTAMP"
   echo "========================================"
-} >> "$LOG_FILE"
 
-# ---- Actual action (unchanged behavior) ----
-wakeonlan -i 192.168.50.255 A0:CE:C8:0A:4A:1D
+  # Actual action with output captured
+  echo "Sending WoL packet to 192.168.50.255 (MAC: A0:CE:C8:0A:4A:1D)..."
+  if wakeonlan -i 192.168.50.255 A0:CE:C8:0A:4A:1D 2>&1; then
+    echo "WoL packet sent successfully."
+  else
+    echo "ERROR: Failed to send WoL packet (exit code: $?)"
+  fi
 
-{
   echo "END   : $(date '+%Y-%m-%d %H:%M:%S')"
   echo
 } >> "$LOG_FILE"

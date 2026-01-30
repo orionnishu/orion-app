@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -64,8 +64,8 @@ def pc_status():
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, user: str = Depends(authenticate)):
     return templates.TemplateResponse(
-        "dashboard.html",
-        {"request": request, "title": "Dashboard"}
+        "home.html",
+        {"request": request, "title": "Home"}
     )
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -111,9 +111,85 @@ def api_deploy(user: str = Depends(authenticate)):
     return {"status": "ok", "action": "deploy"}
 
 @app.post("/admin/api/webdav/provision", response_class=JSONResponse)
-def api_webdav_provision(user: str = Depends(authenticate)):
-    subprocess.Popen([str(SCRIPTS_DIR / "orion_add_webdav_user.sh")])
-    return {"status": "ok", "action": "webdav-provision"}
+def api_webdav_provision(
+    username: str = Form(...),
+    password: str = Form(...),
+    user: str = Depends(authenticate)
+):
+    # Validate input
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    
+    if not username.isalnum() and "_" not in username:
+        raise HTTPException(status_code=400, detail="Username must be alphanumeric (underscores allowed)")
+    
+    # Run script with password as environment variable
+    env = {"ORION_WEBDAV_PASSWORD": password, "PATH": "/usr/bin:/bin"}
+    subprocess.Popen(
+        ["sudo", "-E", str(SCRIPTS_DIR / "orion_add_webdav_user.sh"), username],
+        env=env
+    )
+    return {"status": "ok", "action": "webdav-provision", "username": username}
+
+# ------------------------------------------------------------------
+# WebDAV User Management
+# ------------------------------------------------------------------
+
+HTPASSWD_FILE = Path("/etc/nginx/dav/users.htpasswd")
+WEBDAV_BASE_DIR = Path("/mnt/orion-nas/users")
+
+@app.get("/admin/api/webdav/users", response_class=JSONResponse)
+def list_webdav_users(user: str = Depends(authenticate)):
+    """List all WebDAV users with folder stats"""
+    users = []
+    
+    # Read htpasswd file
+    if HTPASSWD_FILE.exists():
+        with open(HTPASSWD_FILE, "r") as f:
+            for line in f:
+                if ":" in line:
+                    username = line.split(":")[0].strip()
+                    user_data = {"username": username, "file_count": None, "size": None}
+                    
+                    # Get folder stats if exists
+                    user_dir = WEBDAV_BASE_DIR / username
+                    if user_dir.exists():
+                        try:
+                            result = subprocess.run(
+                                ["du", "-sh", str(user_dir)],
+                                capture_output=True, text=True, timeout=5
+                            )
+                            if result.returncode == 0:
+                                user_data["size"] = result.stdout.split()[0]
+                            
+                            result = subprocess.run(
+                                ["find", str(user_dir), "-type", "f"],
+                                capture_output=True, text=True, timeout=10
+                            )
+                            if result.returncode == 0:
+                                user_data["file_count"] = len(result.stdout.strip().split("\n")) if result.stdout.strip() else 0
+                        except Exception:
+                            pass
+                    
+                    users.append(user_data)
+    
+    return users
+
+@app.delete("/admin/api/webdav/users/{username}", response_class=JSONResponse)
+def delete_webdav_user(
+    username: str,
+    delete_data: bool = Query(True),
+    user: str = Depends(authenticate)
+):
+    """Delete a WebDAV user"""
+    # Run delete script
+    subprocess.Popen([
+        "sudo", str(SCRIPTS_DIR / "orion_delete_webdav_user.sh"),
+        username,
+        "--delete-data" if delete_data else "--keep-data"
+    ])
+    
+    return {"status": "ok", "action": "delete-user", "username": username, "data_deleted": delete_data}
 
 # ------------------------------------------------------------------
 # Unified Admin Log Reader (READ-ONLY)

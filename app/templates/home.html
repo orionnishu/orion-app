@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="home-container">
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Orion Home Server</h1>
+        <p class="tagline">A self-hosted personal cloud running on Raspberry Pi 5</p>
+    </section>
+
+    <!-- Quick Status -->
+    <section class="status-cards">
+        <div class="status-card">
+            <span class="status-icon">🖥️</span>
+            <div>
+                <span class="status-label">PC Status</span>
+                <span class="status-value" id="pc-status">Checking...</span>
+            </div>
+        </div>
+        <div class="status-card">
+            <span class="status-icon">🌡️</span>
+            <div>
+                <span class="status-label">CPU Temp</span>
+                <span class="status-value" id="cpu-temp">--</span>
+            </div>
+        </div>
+        <div class="status-card">
+            <span class="status-icon">💾</span>
+            <div>
+                <span class="status-label">RAM Used</span>
+                <span class="status-value" id="ram-used">--</span>
+            </div>
+        </div>
+        <div class="status-card">
+            <span class="status-icon">🌀</span>
+            <div>
+                <span class="status-label">Fan Speed</span>
+                <span class="status-value" id="fan-speed">--</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about">
+        <h2>About This Server</h2>
+        <p>
+            <strong>Orion</strong> is a personal home server project designed to provide
+            file synchronization, media streaming, and system monitoring—all running on
+            a compact Raspberry Pi 5 (8GB).
+        </p>
+
+        <div class="features">
+            <div class="feature">
+                <h3>📁 File Sync</h3>
+                <p>WebDAV-based file synchronization for mobile devices using FolderSync.</p>
+            </div>
+            <div class="feature">
+                <h3>📊 Monitoring</h3>
+                <p>Real-time health dashboards tracking CPU, memory, and fan metrics.</p>
+            </div>
+            <div class="feature">
+                <h3>🔒 Secure Access</h3>
+                <p>Tailscale mesh VPN for secure remote access without port forwarding.</p>
+            </div>
+            <div class="feature">
+                <h3>⚡ PC Control</h3>
+                <p>Wake-on-LAN and remote sleep controls for your Windows workstation.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Links -->
+    <section class="quick-links">
+        <h2>Quick Links</h2>
+        <div class="links">
+            <a href="/dashboard" class="link-card">
+                <span class="link-icon">📈</span>
+                <span>System Dashboard</span>
+            </a>
+            <a href="/admin" class="link-card">
+                <span class="link-icon">⚙️</span>
+                <span>Admin Console</span>
+            </a>
+            <a href="/media" class="link-card">
+                <span class="link-icon">🎬</span>
+                <span>Media Library</span>
+            </a>
+        </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section class="tech-stack">
+        <h2>Tech Stack</h2>
+        <div class="tech-items">
+            <span class="tech-badge">Raspberry Pi 5</span>
+            <span class="tech-badge">Raspbian 64-bit</span>
+            <span class="tech-badge">Python / FastAPI</span>
+            <span class="tech-badge">nginx WebDAV</span>
+            <span class="tech-badge">SQLite</span>
+            <span class="tech-badge">Tailscale</span>
+        </div>
+    </section>
+</div>
+
+<script>
+    // Fetch quick stats
+    async function loadHomeStats() {
+        try {
+            // PC Status
+            const pcRes = await fetch('/api/pc-status');
+            const pcData = await pcRes.json();
+            const pcEl = document.getElementById('pc-status');
+            pcEl.textContent = pcData.online ? 'Online' : 'Offline';
+            pcEl.style.color = pcData.online ? '#059669' : '#dc2626';
+
+            // Latest metrics
+            const metrics = ['cpu-temp', 'ram-used', 'fan-rpm'];
+            for (const metric of metrics) {
+                const res = await fetch(`/api/metrics/${metric}?window=1h`);
+                const data = await res.json();
+                if (data.values && data.values.length > 0) {
+                    const latest = data.values[data.values.length - 1];
+                    if (metric === 'cpu-temp') {
+                        document.getElementById('cpu-temp').textContent = latest.toFixed(1) + '°C';
+                    } else if (metric === 'ram-used') {
+                        document.getElementById('ram-used').textContent = latest.toFixed(0) + ' MB';
+                    } else if (metric === 'fan-rpm') {
+                        document.getElementById('fan-speed').textContent = latest.toFixed(0) + ' RPM';
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load stats', e);
+        }
+    }
+
+    loadHomeStats();
+    setInterval(loadHomeStats, 30000);
+</script>
+{% endblock %}
