@@ -64,8 +64,8 @@ def pc_status():
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, user: str = Depends(authenticate)):
     return templates.TemplateResponse(
-        "dashboard.html",
-        {"request": request, "title": "Dashboard"}
+        "home.html",
+        {"request": request, "title": "Home"}
     )
 
 @app.get("/dashboard", response_class=HTMLResponse)
