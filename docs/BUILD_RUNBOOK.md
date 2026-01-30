@@ -55,33 +55,24 @@ sudo chmod 2775 /mnt/orion-nas/users /mnt/orion-nas/users/*
 ## 🌐 3. Networking & Services
 
 ### Nginx WebDAV
-1. Configure htpasswd:
+1. Configure htpasswd (EXTERNAL):
    ```bash
    sudo mkdir -p /etc/nginx/dav
    sudo htpasswd -c /etc/nginx/dav/users.htpasswd <user>
    ```
-2. Link config from `docs/orion-webdav.conf` to `/etc/nginx/sites-available/`
-3. Enable: `sudo ln -sf /etc/nginx/sites-available/orion-webdav /etc/nginx/sites-enabled/default` (Replace default)
+2. Symlink config from Repository:
+   ```bash
+   sudo ln -sf /home/orion/server/system_configs/nginx/orion-webdav /etc/nginx/sites-available/orion-webdav
+   ```
+3. Enable: `sudo ln -sf /etc/nginx/sites-available/orion-webdav /etc/nginx/sites-enabled/default`
 4. Restart: `sudo systemctl restart nginx`
 
 ### FastAPI Service
-Create `/etc/systemd/system/orion-webapp.service`:
-```ini
-[Unit]
-Description=ORION Web Application
-After=network.target
-
-[Service]
-User=orion
-Group=orion
-WorkingDirectory=/home/orion/server
-ExecStart=/home/orion/server/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-Start: `sudo systemctl enable --now orion-webapp`
+1. Symlink service from Repository:
+   ```bash
+   sudo ln -sf /home/orion/server/system_configs/systemd/orion-webapp.service /etc/systemd/system/orion-webapp.service
+   ```
+2. Start: `sudo systemctl daemon-reload && sudo systemctl enable --now orion-webapp`
 
 ---
 
@@ -99,8 +90,46 @@ Ensure crontab (`crontab -e -u orion`) has:
 
 ---
 
-## 🚀 5. Testing & Validation
+## 🔒 5. Tailscale Serve (HTTPS Routing)
+
+### Install & Authenticate
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+# Follow the authentication URL
+```
+
+### Configure Path-Based Routing
+```bash
+# Route root to FastAPI (port 8000)
+sudo tailscale serve --bg 8000
+
+# Route /dav to WebDAV (port 8082)
+sudo tailscale serve --bg --set-path /dav http://127.0.0.1:8082
+```
+
+### Generate HTTPS Certificate
+```bash
+sudo tailscale cert orion-raspian.taila3b741.ts.net
+```
+
+### Verify Configuration
+```bash
+tailscale serve status
+# Expected output:
+# https://orion-raspian.taila3b741.ts.net (tailnet only)
+# |-- /    proxy http://127.0.0.1:8000
+# |-- /dav proxy http://127.0.0.1:8082
+```
+
+> [!NOTE]
+> If browsers show certificate warnings, restart the Tailscale client on the accessing device and clear browser cache.
+
+---
+
+## 🚀 6. Testing & Validation
 
 - **Web App**: `curl http://127.0.0.1:8000/` (Expect 401)
 - **WebDAV**: `curl -u user:pass -X PROPFIND http://127.0.0.1:8082/`
 - **Sensors**: Run `sensors` to verify temperature visibility.
+- **HTTPS**: Access `https://orion-raspian.taila3b741.ts.net/` from a Tailscale device.

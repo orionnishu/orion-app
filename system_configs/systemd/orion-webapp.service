@@ -1,0 +1,14 @@
+[Unit]
+Description=ORION Web Application (FastAPI)
+After=network.target
+
+[Service]
+User=orion
+Group=orion
+WorkingDirectory=/home/orion/server
+ExecStart=/home/orion/server/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

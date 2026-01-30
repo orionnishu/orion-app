@@ -42,3 +42,5 @@ tmp/
 *.jpg
 *.png
 *.mp4
+*.crt
+*.key

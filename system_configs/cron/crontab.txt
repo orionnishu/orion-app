@@ -1,0 +1,2 @@
+* * * * * /home/orion/server/services/pi-monitor/bin/pi-monitor.sh >> /home/orion/server/services/pi-monitor/logs/cron.log 2>&1
+5 0 * * 0 sqlite3 /home/orion/server/services/pi-monitor/db/pi-monitor.db < /home/orion/server/services/pi-monitor/sql/archive_weekly.sql

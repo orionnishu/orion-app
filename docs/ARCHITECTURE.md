@@ -68,3 +68,21 @@ The system uses a dedicated USB drive mounted at `/mnt/orion-nas`.
 
 - **Backups**: Scripts in `scripts/` (e.g., `pisync_to_pc.sh`) handle intermittent backups.
 - **Cleanup**: Weekly database archival ensures the monitoring database remains performant.
+
+---
+
+## 6. System Integration
+
+To ensure high portability, core system configurations are stored in the repository under `system_configs/` and symlinked to their respective system locations.
+
+### 6.1 Repository Managed (Internal)
+*   **Systemd**: `system_configs/systemd/orion-webapp.service` → `/etc/systemd/system/`
+*   **Nginx**: `system_configs/nginx/orion-webdav` → `/etc/nginx/sites-available/`
+*   **Cron**: `system_configs/cron/crontab.txt` (Template source for `crontab -e`)
+
+### 6.2 System Only (External)
+The following items **cannot** be in the repository for security or technical reasons:
+*   **Secrets**: `/etc/nginx/dav/users.htpasswd` (Passwords).
+*   **Mounts**: `/etc/fstab` (System-specific UUIDs).
+*   **Tailscale**: Proprietary state managed by the Tailscale daemon.
+*   **Database**: `services/pi-monitor/db/pi-monitor.db` (Git-ignored live data).
