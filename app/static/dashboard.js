@@ -5,6 +5,7 @@ let cpuTempChart;
 let ramChart;
 let loadChart;
 let fanChart;
+let diskChart;
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -49,6 +50,11 @@ function getMetricTheme(value, metric) {
     case "fan_rpm":
       if (value <= 2000) return colors.green;
       if (value <= 3500) return colors.orange;
+      return colors.red;
+
+    case "disk_usage":
+      if (value <= 70) return colors.green;
+      if (value <= 90) return colors.orange;
       return colors.red;
 
     default:
@@ -132,6 +138,7 @@ function initCharts() {
   ramChart = createLineChart("ramChart", "RAM Used");
   loadChart = createLineChart("loadChart", "Load Avg");
   fanChart = createLineChart("fanChart", "Fan RPM");
+  diskChart = createLineChart("diskChart", "Disk Usage (%)");
 }
 
 // --------------------
@@ -177,6 +184,7 @@ function refreshAll() {
   updateChart(ramChart, "/api/metrics/ram-used", "ram_used", "val-ram-used");
   updateChart(loadChart, "/api/metrics/load-1m", "load_1m", "val-load-1m");
   updateChart(fanChart, "/api/metrics/fan-rpm", "fan_rpm", "val-fan-rpm");
+  updateChart(diskChart, "/api/metrics/disk-usage", "disk_usage", "val-disk-usage");
 
   const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const el = document.getElementById("last-updated");

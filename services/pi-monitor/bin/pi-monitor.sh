@@ -23,12 +23,13 @@ FAN_PWM=$(/usr/bin/sensors | awk '/pwm1:/ {print $2}')
 # --- CPU frequency (sysfs, Ubuntu-correct) ---
 FREQ=$(awk '{print int($1/1000) " MHz"}' /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq)
 
-# --- Memory & Load ---
+# --- Memory, Load & Disk ---
 RAM_USED=$(/usr/bin/free -m | awk '/Mem:/ {print $3}')
 LOAD=$(/usr/bin/uptime | awk -F'load average:' '{print $2}')
+DISK_USAGE=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
 
 # --- Log ---
-echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD" >> "$LOG_PATH"
+echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD | Disk:$DISK_USAGE%" >> "$LOG_PATH"
 
 # --- DB entry ---
 #DB="/home/orion/Documents/projects/pi-monitor/pi-monitor.db"
@@ -42,6 +43,7 @@ INSERT INTO metrics (ts,source, name, value, unit) VALUES
 ('$TS','$SOURCE', 'fan_pwm', '${FAN_PWM%\%}', '%'),
 ('$TS','$SOURCE', 'cpu_freq', '${FREQ% MHz}', 'MHz'),
 ('$TS','$SOURCE', 'ram_used', '$RAM_USED', 'MB'),
-('$TS','$SOURCE', 'load_1m', '$(echo "$LOAD" | cut -d',' -f1)', 'load');
+('$TS','$SOURCE', 'load_1m', '$(echo "$LOAD" | cut -d',' -f1)', 'load'),
+('$TS','$SOURCE', 'disk_usage', '$DISK_USAGE', '%');
 EOF
 

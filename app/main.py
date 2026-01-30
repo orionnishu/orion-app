@@ -262,3 +262,6 @@ def load_1m_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/fan-rpm", response_class=JSONResponse)
 def fan_rpm_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("fan_rpm", window)
+@app.get("/api/metrics/disk-usage", response_class=JSONResponse)
+def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("disk_usage", window)

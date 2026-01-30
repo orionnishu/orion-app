@@ -47,6 +47,13 @@
         <span class="stat-unit">RPM</span>
       </div>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">Disk Usage</span>
+      <div>
+        <span class="stat-value" id="val-disk-usage">--</span>
+        <span class="stat-unit">%</span>
+      </div>
+    </div>
   </section>
 
   <!-- Main Charts Section -->
@@ -76,6 +83,13 @@
       <h3>🌀 Fan Performance</h3>
       <div class="chart-container">
         <canvas id="fanChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>💽 Disk Usage</h3>
+      <div class="chart-container">
+        <canvas id="diskChart"></canvas>
       </div>
     </div>
   </div>
