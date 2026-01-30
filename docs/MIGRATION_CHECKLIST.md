@@ -9,27 +9,27 @@
 ## Phase 1: Immediate Priority
 
 ### A. Base System Setup
-- [ ] A1. Update & upgrade system packages
-- [ ] A2. Install essential packages (check first, install if missing)
-- [ ] A3. Verify timezone is `Asia/Kolkata`
+- [x] A1. Update & upgrade system packages
+- [x] A2. Install essential packages (check first, install if missing) — already present
+- [x] A3. Verify timezone is `Asia/Kolkata` — confirmed
 
 ### E. Groups & Permissions
-- [ ] E1. Create `orion` group
-- [ ] E2. Add `orion` user to `orion` group
-- [ ] E3. Add `www-data` to `orion` group
+- [x] E1. Create `orion` group — already exists
+- [x] E2. Add `orion` user to `orion` group — already done
+- [x] E3. Add `www-data` to `orion` group ✓
 
 ### H. Networking (Pi ↔ PC Static Subnet)
-- [ ] H1. Configure static IP on Pi ethernet (e.g., 192.168.50.2/24)
-- [ ] H2. Document PC static IP for same subnet
-- [ ] H3. Verify mutual reachability (ping test)
-- [ ] H4. Test Wake-on-LAN from Pi to PC
+- [x] H1. Configure static IP on Pi ethernet — `192.168.50.2/24` via NetworkManager
+- [ ] H2. Document PC static IP for same subnet — **USER ACTION: Set PC to 192.168.50.1/24**
+- [ ] H3. Verify mutual reachability (ping test) — pending cable connection
+- [ ] H4. Test Wake-on-LAN from Pi to PC — pending
 
 ### C. nginx Basic Setup
-- [ ] C1. Install nginx (without extras for now)
-- [ ] C2. Install apache2-utils (for htpasswd)
-- [ ] C3. Create nginx temp directories (`/var/lib/nginx/tmp`)
-- [ ] C5. Copy htpasswd file to `/etc/nginx/dav/users.htpasswd`
-- [ ] C7. Test and reload nginx
+- [x] C1. Install nginx (without extras for now)
+- [x] C2. Install apache2-utils (for htpasswd)
+- [x] C3. Create nginx temp directories (`/var/lib/nginx/tmp`)
+- [x] C5. Copy htpasswd file to `/etc/nginx/dav/users.htpasswd` — 2 users
+- [x] C7. Test and reload nginx — running
 
 ---
 
