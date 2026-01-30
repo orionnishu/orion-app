@@ -94,6 +94,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
     gap: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 @media (max-width: 600px) {
@@ -125,6 +126,69 @@
     position: relative;
 }
 
+/* Storage Section */
+.storage-section {
+    margin-top: 3rem;
+}
+
+.storage-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.storage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.storage-card {
+    background: #fff;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.storage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.storage-mount {
+    font-weight: 700;
+    color: #111827;
+}
+
+.storage-usage-text {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.progress-bg {
+    height: 10px;
+    background: #f3f4f6;
+    border-radius: 5px;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #2563eb;
+    border-radius: 5px;
+    transition: width 0.5s ease-out;
+}
+
+.storage-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+
 /* Status colors */
 .color-green {
     color: #10b981;
@@ -136,4 +200,16 @@
 
 .color-red {
     color: #ef4444;
+}
+
+.bg-green {
+    background-color: #10b981;
+}
+
+.bg-orange {
+    background-color: #f59e0b;
+}
+
+.bg-red {
+    background-color: #ef4444;
 }

@@ -5,7 +5,6 @@ let cpuTempChart;
 let ramChart;
 let loadChart;
 let fanChart;
-let diskChart;
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -13,19 +12,23 @@ const REFRESH_INTERVAL_MS = 30000;
 const colors = {
   green: {
     border: 'rgba(16, 185, 129, 1)',
-    bg: 'rgba(16, 185, 129, 0.1)'
+    bg: 'rgba(16, 185, 129, 0.1)',
+    simple: '#10b981'
   },
   orange: {
     border: 'rgba(245, 158, 11, 1)',
-    bg: 'rgba(245, 158, 11, 0.1)'
+    bg: 'rgba(245, 158, 11, 0.1)',
+    simple: '#f59e0b'
   },
   red: {
     border: 'rgba(239, 68, 68, 1)',
-    bg: 'rgba(239, 68, 68, 0.1)'
+    bg: 'rgba(239, 68, 68, 0.1)',
+    simple: '#ef4444'
   },
   blue: {
     border: 'rgba(37, 99, 235, 1)',
-    bg: 'rgba(37, 99, 235, 0.1)'
+    bg: 'rgba(37, 99, 235, 0.1)',
+    simple: '#2563eb'
   }
 };
 
@@ -67,7 +70,9 @@ function getMetricTheme(value, metric) {
 // --------------------
 
 function createLineChart(canvasId, label) {
-  const ctx = document.getElementById(canvasId).getContext("2d");
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  const ctx = canvas.getContext("2d");
 
   return new Chart(ctx, {
     type: "line",
@@ -138,13 +143,13 @@ function initCharts() {
   ramChart = createLineChart("ramChart", "RAM Used");
   loadChart = createLineChart("loadChart", "Load Avg");
   fanChart = createLineChart("fanChart", "Fan RPM");
-  diskChart = createLineChart("diskChart", "Disk Usage (%)");
 }
 
 // --------------------
 // Fetch + update helper
 // --------------------
 async function updateChart(chart, endpoint, metricName, valueId) {
+  if (!chart) return;
   const window = document.getElementById("timeWindow").value;
 
   try {
@@ -175,6 +180,41 @@ async function updateChart(chart, endpoint, metricName, valueId) {
   }
 }
 
+// --------------------
+// Storage Status Helper
+// --------------------
+async function updateStorage() {
+  try {
+    const res = await fetch('/api/storage/status');
+    const disks = await res.json();
+    const grid = document.getElementById('storage-grid');
+
+    if (disks.error) throw new Error(disks.error);
+
+    grid.innerHTML = disks.map(disk => {
+      const theme = getMetricTheme(disk.percent, 'disk_usage');
+      return `
+                <div class="storage-card">
+                    <div class="storage-header">
+                        <span class="storage-mount">${disk.mount}</span>
+                        <span class="storage-usage-text" style="color: ${theme.simple}">${disk.percent}%</span>
+                    </div>
+                    <div class="progress-bg">
+                        <div class="progress-fill" style="width: ${disk.percent}%; background-color: ${theme.simple}"></div>
+                    </div>
+                    <div class="storage-details">
+                        <span>Used: ${disk.used} / ${disk.size}</span>
+                        <span>Avail: ${disk.avail}</span>
+                    </div>
+                </div>
+            `;
+    }).join('');
+  } catch (err) {
+    console.error('Error updating storage:', err);
+    document.getElementById('storage-grid').innerHTML = `<div class="error">Failed to load storage status</div>`;
+  }
+}
+
 
 // --------------------
 // Refresh all data
@@ -184,7 +224,7 @@ function refreshAll() {
   updateChart(ramChart, "/api/metrics/ram-used", "ram_used", "val-ram-used");
   updateChart(loadChart, "/api/metrics/load-1m", "load_1m", "val-load-1m");
   updateChart(fanChart, "/api/metrics/fan-rpm", "fan_rpm", "val-fan-rpm");
-  updateChart(diskChart, "/api/metrics/disk-usage", "disk_usage", "val-disk-usage");
+  updateStorage();
 
   const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const el = document.getElementById("last-updated");

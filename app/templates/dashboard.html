@@ -47,13 +47,6 @@
         <span class="stat-unit">RPM</span>
       </div>
     </div>
-    <div class="stat-card">
-      <span class="stat-label">Disk Usage</span>
-      <div>
-        <span class="stat-value" id="val-disk-usage">--</span>
-        <span class="stat-unit">%</span>
-      </div>
-    </div>
   </section>
 
   <!-- Main Charts Section -->
@@ -85,14 +78,16 @@
         <canvas id="fanChart"></canvas>
       </div>
     </div>
-
-    <div class="chart-card">
-      <h3>💽 Disk Usage</h3>
-      <div class="chart-container">
-        <canvas id="diskChart"></canvas>
-      </div>
-    </div>
   </div>
+
+  <!-- Storage Overview Section -->
+  <section class="storage-section">
+    <h2>💽 Storage Overview</h2>
+    <div id="storage-grid" class="storage-grid">
+      <!-- Dynmically populated -->
+      <div class="loading">Fetching storage status...</div>
+    </div>
+  </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
