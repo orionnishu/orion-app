@@ -150,43 +150,49 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.storage-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.storage-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 0.25rem;
+}
+
+.storage-mount-path {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-family: monospace;
     margin-bottom: 1rem;
 }
 
-.storage-mount {
-    font-weight: 700;
-    color: #111827;
+.storage-bar-container {
+    margin-bottom: 0.75rem;
 }
 
-.storage-usage-text {
-    font-size: 0.875rem;
-    color: #6b7280;
-}
-
-.progress-bg {
-    height: 10px;
+.storage-bar-bg {
+    height: 16px;
     background: #f3f4f6;
-    border-radius: 5px;
-    margin-bottom: 0.5rem;
+    border-radius: 8px;
     overflow: hidden;
+    margin-bottom: 0.5rem;
 }
 
-.progress-fill {
+.storage-bar-fill {
     height: 100%;
-    background: #2563eb;
-    border-radius: 5px;
+    border-radius: 8px;
     transition: width 0.5s ease-out;
 }
 
-.storage-details {
+.storage-bar-labels {
     display: flex;
     justify-content: space-between;
     font-size: 0.75rem;
-    color: #9ca3af;
+    color: #6b7280;
+}
+
+.storage-percent {
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: right;
 }
 
 /* Status colors */

@@ -191,23 +191,32 @@ async function updateStorage() {
 
     if (disks.error) throw new Error(disks.error);
 
+    // Create labels for common mount points
+    const labels = {
+      '/': 'OS Disk',
+      '/boot/firmware': 'Boot',
+      '/mnt/orion-nas': 'NAS Storage'
+    };
+
     grid.innerHTML = disks.map(disk => {
       const theme = getMetricTheme(disk.percent, 'disk_usage');
+      const label = labels[disk.mount] || disk.mount;
       return `
-                <div class="storage-card">
-                    <div class="storage-header">
-                        <span class="storage-mount">${disk.mount}</span>
-                        <span class="storage-usage-text" style="color: ${theme.simple}">${disk.percent}%</span>
-                    </div>
-                    <div class="progress-bg">
-                        <div class="progress-fill" style="width: ${disk.percent}%; background-color: ${theme.simple}"></div>
-                    </div>
-                    <div class="storage-details">
-                        <span>Used: ${disk.used} / ${disk.size}</span>
-                        <span>Avail: ${disk.avail}</span>
-                    </div>
-                </div>
-            `;
+        <div class="storage-card">
+          <div class="storage-title">${label}</div>
+          <div class="storage-mount-path">${disk.mount}</div>
+          <div class="storage-bar-container">
+            <div class="storage-bar-bg">
+              <div class="storage-bar-fill" style="width: ${disk.percent}%; background-color: ${theme.simple}"></div>
+            </div>
+            <div class="storage-bar-labels">
+              <span>${disk.used} used</span>
+              <span>${disk.size} total</span>
+            </div>
+          </div>
+          <div class="storage-percent" style="color: ${theme.simple}">${disk.percent}% full</div>
+        </div>
+      `;
     }).join('');
   } catch (err) {
     console.error('Error updating storage:', err);
