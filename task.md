@@ -113,3 +113,10 @@
 | K. Integration | ✅ Complete |
 | L. Pi-Monitor | ✅ Complete |
 | M. Admin & Users | ✅ Complete |
+| N. Branding | [/] In Progress |
+
+### Category N: Branding
+- [/] N1. Design logo options
+- [ ] N2. Implement selected logo in header
+- [ ] N3. Update favicon
+

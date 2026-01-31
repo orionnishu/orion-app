@@ -33,6 +33,18 @@ header {
     min-width: 0;
 }
 
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+}
+
+.logo {
+    height: 32px;
+    width: auto;
+}
+
 header h1 {
     margin: 0;
     font-size: 1.1rem;
@@ -52,11 +64,20 @@ nav a {
     text-decoration: none;
     font-size: 0.85rem;
     font-weight: 500;
-    transition: color 0.15s;
+    transition: all 0.2s;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
 }
 
 nav a:hover {
     color: #f8fafc;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+nav a.active {
+    color: #fff;
+    background: rgba(37, 99, 235, 0.2);
+    font-weight: 600;
 }
 
 main {

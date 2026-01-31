@@ -17,12 +17,19 @@
 <body>
 
     <header>
-        <h1>Orion Home Server</h1>
+        {% set root = request.scope.get('root_path', '') %}
+        {% set path = request.url.path %}
+        
+        <a href="{{ root }}/" class="logo-container">
+            <img src="{{ root }}/static/logo.png" alt="Orion Logo" class="logo">
+            <h1>Orion Home Server</h1>
+        </a>
+        
         <nav>
-            <a href="{{ request.scope.get('root_path', '') }}/">Home</a>
-            <a href="{{ request.scope.get('root_path', '') }}/dashboard">Dashboard</a>
-            <a href="{{ request.scope.get('root_path', '') }}/media">Media</a>
-            <a href="{{ request.scope.get('root_path', '') }}/admin">Admin</a>
+            <a href="{{ root }}/" class="{{ 'active' if path == root ~ '/' or path == root else '' }}">Home</a>
+            <a href="{{ root }}/dashboard" class="{{ 'active' if '/dashboard' in path else '' }}">Dashboard</a>
+            <a href="{{ root }}/media" class="{{ 'active' if '/media' in path else '' }}">Media</a>
+            <a href="{{ root }}/admin" class="{{ 'active' if '/admin' in path else '' }}">Admin</a>
         </nav>
     </header>
 
