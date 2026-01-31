@@ -43,11 +43,12 @@ header {
 }
 
 .logo {
-    height: 32px;
+    height: 48px;
     width: auto;
     object-fit: contain;
     max-width: 100%;
 }
+
 
 header h1 {
     margin: 0;
