@@ -116,7 +116,7 @@
 | N. Branding | [/] In Progress |
 
 ### Category N: Branding
-- [/] N1. Design logo options
-- [ ] N2. Implement selected logo in header
-- [ ] N3. Update favicon
+- [x] N1. Design logo options
+- [x] N2. Implement selected logo in header
+- [x] N3. Update favicon (Using logo for now)
 
