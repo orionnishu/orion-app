@@ -6,7 +6,8 @@ After=network.target
 User=orion
 Group=orion
 WorkingDirectory=/home/orion/server
-ExecStart=/home/orion/server/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Environment="ROOT_PATH=/app"
+ExecStart=/home/orion/server/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --root-path /app
 Restart=always
 RestartSec=3
 

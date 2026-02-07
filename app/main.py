@@ -7,10 +7,14 @@ import subprocess
 import secrets
 import sqlite3
 import time
+import os
 from pathlib import Path
 from collections import deque
 
-app = FastAPI(title="Orion Home Server")
+# Support for being served under a subpath (e.g., /app via Tailscale)
+ROOT_PATH = os.environ.get("ROOT_PATH", "")
+
+app = FastAPI(title="Orion Home Server", root_path=ROOT_PATH)
 
 # --------------------
 # Auth config
@@ -262,3 +266,31 @@ def load_1m_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/fan-rpm", response_class=JSONResponse)
 def fan_rpm_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("fan_rpm", window)
+@app.get("/api/metrics/disk-usage", response_class=JSONResponse)
+def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("disk_usage", window)
+
+@app.get("/api/storage/status", response_class=JSONResponse)
+def storage_status(user: str = Depends(authenticate)):
+    """Get real-time storage status for all physical disks"""
+    import subprocess
+    try:
+        result = subprocess.run(["df", "-h"], capture_output=True, text=True)
+        lines = result.stdout.strip().split('\n')[1:]
+        disks = []
+        for line in lines:
+            if not line.startswith('/dev/'):
+                continue
+            parts = line.split()
+            if len(parts) >= 6:
+                disks.append({
+                    "filesystem": parts[0],
+                    "size": parts[1],
+                    "used": parts[2],
+                    "avail": parts[3],
+                    "percent": int(parts[4].replace('%', '')),
+                    "mount": parts[5]
+                })
+        return disks
+    except Exception as e:
+        return {"error": str(e)}

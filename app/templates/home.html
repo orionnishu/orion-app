@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set base = request.scope.get('root_path', '') %}
 <div class="home-container">
     <!-- Hero Section -->
     <section class="hero">
@@ -73,17 +74,21 @@
     <section class="quick-links">
         <h2>Quick Links</h2>
         <div class="links">
-            <a href="/dashboard" class="link-card">
+            <a href="{{ base }}/dashboard" class="link-card">
                 <span class="link-icon">📈</span>
                 <span>System Dashboard</span>
             </a>
-            <a href="/admin" class="link-card">
+            <a href="{{ base }}/admin" class="link-card">
                 <span class="link-icon">⚙️</span>
                 <span>Admin Console</span>
             </a>
-            <a href="/media" class="link-card">
+            <a href="{{ base }}/media" class="link-card">
                 <span class="link-icon">🎬</span>
                 <span>Media Library</span>
+            </a>
+            <a href="{{ base }}/static/foldersync.apk" class="link-card" download>
+                <span class="link-icon">📥</span>
+                <span>Get Sync Client</span>
             </a>
         </div>
     </section>
@@ -103,11 +108,13 @@
 </div>
 
 <script>
+    const BASE_PATH = '{{ base }}';
+
     // Fetch quick stats
     async function loadHomeStats() {
         try {
             // PC Status
-            const pcRes = await fetch('/api/pc-status');
+            const pcRes = await fetch(BASE_PATH + '/api/pc-status');
             const pcData = await pcRes.json();
             const pcEl = document.getElementById('pc-status');
             pcEl.textContent = pcData.online ? 'Online' : 'Offline';
@@ -116,7 +123,7 @@
             // Latest metrics
             const metrics = ['cpu-temp', 'ram-used', 'fan-rpm'];
             for (const metric of metrics) {
-                const res = await fetch(`/api/metrics/${metric}?window=1h`);
+                const res = await fetch(`${BASE_PATH}/api/metrics/${metric}?window=1h`);
                 const data = await res.json();
                 if (data.values && data.values.length > 0) {
                     const latest = data.values[data.values.length - 1];

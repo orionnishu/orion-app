@@ -86,6 +86,8 @@
 </div>
 
 <script>
+  const BASE_PATH = '{{ request.scope.get("root_path", "") }}';
+
   // Tab Navigation
   function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -100,7 +102,7 @@
   // PC Status
   async function refreshStatus() {
     try {
-      const res = await fetch("/api/pc-status");
+      const res = await fetch(BASE_PATH + "/api/pc-status");
       const data = await res.json();
       const statusEl = document.getElementById("pc-status");
       const actionsEl = document.getElementById("pc-actions");
@@ -122,7 +124,7 @@
   // Run Action
   async function runAction(action) {
     try {
-      await fetch(`/admin/api/${action}`, { method: 'POST' });
+      await fetch(BASE_PATH + `/admin/api/${action}`, { method: 'POST' });
       setTimeout(refreshLogs, 500);
     } catch (e) {
       console.error("Action failed", e);
@@ -133,7 +135,7 @@
   async function loadUsers() {
     const container = document.getElementById('users-list');
     try {
-      const res = await fetch('/admin/api/webdav/users');
+      const res = await fetch(BASE_PATH + '/admin/api/webdav/users');
       const users = await res.json();
 
       if (users.length === 0) {
@@ -174,7 +176,7 @@
     statusEl.className = 'status-pending';
 
     try {
-      const res = await fetch('/admin/api/webdav/provision', {
+      const res = await fetch(BASE_PATH + '/admin/api/webdav/provision', {
         method: 'POST',
         body: formData
       });
@@ -214,7 +216,7 @@
     const deleteData = document.getElementById('delete-data').checked;
 
     try {
-      const res = await fetch(`/admin/api/webdav/users/${pendingDeleteUser}?delete_data=${deleteData}`, {
+      const res = await fetch(BASE_PATH + `/admin/api/webdav/users/${pendingDeleteUser}?delete_data=${deleteData}`, {
         method: 'DELETE'
       });
 
@@ -231,7 +233,7 @@
   // Logs
   async function refreshLogs() {
     try {
-      const res = await fetch('/admin/logs?lines=1000');
+      const res = await fetch(BASE_PATH + '/admin/logs?lines=1000');
       const data = await res.json();
       const el = document.getElementById('log-content');
       el.textContent = data.lines;

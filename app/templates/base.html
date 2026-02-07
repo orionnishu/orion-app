@@ -8,21 +8,28 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/admin.css">
-    <link rel="stylesheet" href="/static/home.css">
-    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/style.css">
+    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/admin.css">
+    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/home.css">
+    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/dashboard.css">
 </head>
 
 <body>
 
     <header>
-        <h1>Orion Home Server</h1>
+        {% set root = request.scope.get('root_path', '') %}
+        {% set path = request.url.path %}
+        
+        <a href="{{ root }}/" class="logo-container">
+            <img src="{{ root }}/static/logo.png" alt="Orion Logo" class="logo">
+            <h1>Orion Home Server</h1>
+        </a>
+        
         <nav>
-            <a href="/">Home</a>
-            <a href="/dashboard">Dashboard</a>
-            <a href="/media">Media</a>
-            <a href="/admin">Admin</a>
+            <a href="{{ root }}/" class="{{ 'active' if path == root ~ '/' or path == root else '' }}">Home</a>
+            <a href="{{ root }}/dashboard" class="{{ 'active' if '/dashboard' in path else '' }}">Dashboard</a>
+            <a href="{{ root }}/media" class="{{ 'active' if '/media' in path else '' }}">Media</a>
+            <a href="{{ root }}/admin" class="{{ 'active' if '/admin' in path else '' }}">Admin</a>
         </nav>
     </header>
 

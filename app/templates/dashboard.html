@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set base = request.scope.get('root_path', '') %}
 <div class="dashboard-container">
   <header class="dashboard-header">
     <div>
@@ -79,8 +80,18 @@
       </div>
     </div>
   </div>
+
+  <!-- Storage Overview Section -->
+  <section class="storage-section">
+    <h2>💽 Storage Overview</h2>
+    <div id="storage-grid" class="storage-grid">
+      <!-- Dynamically populated -->
+      <div class="loading">Fetching storage status...</div>
+    </div>
+  </section>
 </div>
 
+<script>window.BASE_PATH = '{{ base }}';</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/static/dashboard.js"></script>
+<script src="{{ base }}/static/dashboard.js"></script>
 {% endblock %}
