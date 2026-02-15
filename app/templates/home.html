@@ -19,10 +19,10 @@
             </div>
         </div>
         <div class="status-card">
-            <span class="status-icon">🌡️</span>
+            <span class="status-icon">⚡</span>
             <div>
-                <span class="status-label">CPU Temp</span>
-                <span class="status-value" id="cpu-temp">--</span>
+                <span class="status-label">CPU Freq</span>
+                <span class="status-value" id="cpu-freq">--</span>
             </div>
         </div>
         <div class="status-card">
@@ -33,11 +33,41 @@
             </div>
         </div>
         <div class="status-card">
+            <span class="status-icon">🌡️</span>
+            <div>
+                <span class="status-label">CPU Temp</span>
+                <span class="status-value" id="cpu-temp">--</span>
+            </div>
+        </div>
+
+        <div class="status-card">
             <span class="status-icon">🌀</span>
             <div>
                 <span class="status-label">Fan Speed</span>
                 <span class="status-value" id="fan-speed">--</span>
             </div>
+        </div>
+        <div class="status-card">
+            <span class="status-icon">🏠</span>
+            <div>
+                <span class="status-label">Room Temp</span>
+                <span class="status-value" id="room-temp">--</span>
+            </div>
+        </div>
+        <div class="status-card">
+            <span class="status-icon">💧</span>
+            <div>
+                <span class="status-label">Humidity</span>
+                <span class="status-value" id="room-humidity">--</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="services-section">
+        <h2>System Services</h2>
+        <div id="service-grid" class="service-grid">
+            <div class="loading">Checking services...</div>
         </div>
     </section>
 
@@ -120,8 +150,8 @@
             pcEl.textContent = pcData.online ? 'Online' : 'Offline';
             pcEl.style.color = pcData.online ? '#059669' : '#dc2626';
 
-            // Latest metrics
-            const metrics = ['cpu-temp', 'ram-used', 'fan-rpm'];
+            // Latest metrics from DB
+            const metrics = ['cpu-temp', 'ram-used', 'fan-rpm', 'cpu-freq'];
             for (const metric of metrics) {
                 const res = await fetch(`${BASE_PATH}/api/metrics/${metric}?window=1h`);
                 const data = await res.json();
@@ -130,11 +160,53 @@
                     if (metric === 'cpu-temp') {
                         document.getElementById('cpu-temp').textContent = latest.toFixed(1) + '°C';
                     } else if (metric === 'ram-used') {
-                        document.getElementById('ram-used').textContent = latest.toFixed(0) + ' MB';
+                        document.getElementById('ram-used').innerHTML = (latest / 1000).toFixed(1) + ' <span class="stat-total">/ 4.0 GB</span>';
                     } else if (metric === 'fan-rpm') {
                         document.getElementById('fan-speed').textContent = latest.toFixed(0) + ' RPM';
+                    } else if (metric === 'cpu-freq') {
+                        document.getElementById('cpu-freq').innerHTML = (latest / 1000).toFixed(1) + ' <span class="stat-total">/ 2.4 GHz</span>';
                     }
                 }
+            }
+
+            // Room sensor (try DB first, fallback to live)
+            let tempVal = null;
+            let humVal = null;
+
+            try {
+                const tempRes = await fetch(`${BASE_PATH}/api/metrics/room-temp?window=1h`);
+                const tempData = await tempRes.json();
+                if (tempData.values && tempData.values.length > 0) {
+                    tempVal = tempData.values[tempData.values.length - 1];
+                }
+            } catch (e) { }
+
+            try {
+                const humRes = await fetch(`${BASE_PATH}/api/metrics/room-humidity?window=1h`);
+                const humData = await humRes.json();
+                if (humData.values && humData.values.length > 0) {
+                    humVal = humData.values[humData.values.length - 1];
+                }
+            } catch (e) { }
+
+            // Fallback to live if missing
+            if (tempVal === null || humVal === null) {
+                try {
+                    const liveRes = await fetch(`${BASE_PATH}/api/sensors/dht11`);
+                    const liveData = await liveRes.json();
+                    if (!liveData.error) {
+                        if (tempVal === null) tempVal = liveData.temperature;
+                        if (humVal === null) humVal = liveData.humidity;
+                    }
+                } catch (e) { }
+            }
+
+            // Render
+            if (tempVal !== null) {
+                document.getElementById('room-temp').textContent = tempVal.toFixed(1) + '°C';
+            }
+            if (humVal !== null) {
+                document.getElementById('room-humidity').textContent = humVal.toFixed(0) + '%';
             }
         } catch (e) {
             console.error('Failed to load stats', e);
@@ -142,6 +214,37 @@
     }
 
     loadHomeStats();
+    loadServices();
     setInterval(loadHomeStats, 30000);
+    setInterval(loadServices, 60000);
+
+    async function loadServices() {
+        try {
+            const res = await fetch(`${BASE_PATH}/api/services/status`);
+            const services = await res.json();
+            const grid = document.getElementById('service-grid');
+
+            if (!services || services.length === 0) {
+                grid.innerHTML = '<div class="error">No services found</div>';
+                return;
+            }
+
+            grid.innerHTML = services.map(svc => {
+                const statusClass = svc.status === 'running' ? 'running' : 'stopped';
+                return `
+                    <div class="service-card">
+                        <span class="service-name">${svc.name}</span>
+                        <div class="service-status">
+                            <span class="status-dot ${statusClass}"></span>
+                            <span>${svc.status}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error("Service check failed", e);
+        }
+    }
+
 </script>
 {% endblock %}

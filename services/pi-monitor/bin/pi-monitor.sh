@@ -29,6 +29,28 @@ RAM_USED=$(/usr/bin/free -m | awk '/Mem:/ {print $3}')
 LOAD=$(/usr/bin/uptime | awk -F'load average:' '{print $2}')
 LOAD_1M=$(echo "$LOAD" | cut -d',' -f1 | tr -d ' ')
 
+# --- Room Sensor (DHT11 on GPIO 18) ---
+DHT_OUTPUT=$(/home/orion/server/venv/bin/python3 -u -c "
+import board, adafruit_dht, time
+d = adafruit_dht.DHT11(board.D27, use_pulseio=False)
+for _ in range(5):
+    try:
+        t, h = d.temperature, d.humidity
+        if t is not None and h is not None:
+            print(f'{t},{h}')
+            break
+    except: pass
+    time.sleep(2)
+d.exit()
+" 2>/dev/null)
+ROOM_TEMP=$(echo "$DHT_OUTPUT" | cut -d',' -f1)
+ROOM_HUM=$(echo "$DHT_OUTPUT" | cut -d',' -f2)
+
+ROOM_SQL=""
+if [ -n "$ROOM_TEMP" ] && [ -n "$ROOM_HUM" ]; then
+    ROOM_SQL=", ('$TS','$SOURCE', 'room_temp', '$ROOM_TEMP', 'C'), ('$TS','$SOURCE', 'room_humidity', '$ROOM_HUM', '%')"
+fi
+
 # --- Storage (All real disks) ---
 # We loop through all real mounts and build SQL inserts and log entry
 DISK_SQL=""
@@ -51,7 +73,7 @@ while read -r line; do
 done < <(df -h | grep '^/dev/')
 
 # --- Log ---
-echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD$DISK_LOG" >> "$LOG_PATH"
+echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD | Room:${ROOM_TEMP}C/${ROOM_HUM}%$DISK_LOG" >> "$LOG_PATH"
 
 # --- DB entry ---
 sqlite3 "$DB_PATH" <<EOF
@@ -62,5 +84,5 @@ INSERT INTO metrics (ts, source, name, value, unit) VALUES
 ('$TS','$SOURCE', 'fan_pwm', '${FAN_PWM%\%}', '%'),
 ('$TS','$SOURCE', 'cpu_freq', '${FREQ% MHz}', 'MHz'),
 ('$TS','$SOURCE', 'ram_used', '$RAM_USED', 'MB'),
-('$TS','$SOURCE', 'load_1m', '$LOAD_1M', 'load')$DISK_SQL;
+('$TS','$SOURCE', 'load_1m', '$LOAD_1M', 'load')$ROOM_SQL$DISK_SQL;
 EOF
