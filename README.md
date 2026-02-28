@@ -25,6 +25,7 @@ It combines:
 
 - **[Architecture](docs/ARCHITECTURE.md)**: High-level design and component interaction.
 - **[Build Runbook](docs/BUILD_RUNBOOK.md)**: Steps to recreate or restore the entire system.
+- **[ESP32 Firmware Workspace](esp32/README.md)**: PlatformIO-based firmware development and Arduino IDE migration steps.
 
 ---
 
