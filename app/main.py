@@ -76,7 +76,7 @@ def home(request: Request, user: str = Depends(authenticate)):
 def dashboard(request: Request, user: str = Depends(authenticate)):
     return templates.TemplateResponse(
         "dashboard.html",
-        {"request": request, "title": "Dashboard"}
+        {"request": request, "title": "Pi Health"}
     )
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -229,26 +229,47 @@ WINDOW_MAP = {
 }
 
 def _metric_series(metric_name: str, window: str):
-    if window not in WINDOW_MAP:
-        window = "24h"
-
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    cur.execute(f"""
-        SELECT ts, value
-        FROM metrics
-        WHERE name = ?
-          AND ts >= datetime('now', '{WINDOW_MAP[window]}', 'localtime')
-        ORDER BY ts
-    """, (metric_name,))
+    if window == "weekly":
+        # Query weekly archives
+        cur.execute(f"""
+            SELECT week_start, avg_value
+            FROM metrics_weekly_avg
+            WHERE name = ?
+            ORDER BY week_start
+        """, (metric_name,))
+    else:
+        # Query raw metrics
+        if window not in WINDOW_MAP:
+            window = "24h"
+            
+        cur.execute(f"""
+            SELECT ts, value
+            FROM metrics
+            WHERE name = ?
+              AND ts >= datetime('now', '{WINDOW_MAP[window]}', 'localtime')
+            ORDER BY ts
+        """, (metric_name,))
 
     rows = cur.fetchall()
     conn.close()
 
+    labels = []
+    values = []
+    for r in rows:
+        try:
+            if r[1] is not None and str(r[1]).strip() != "":
+                val = float(r[1])
+                labels.append(r[0])
+                values.append(val)
+        except ValueError:
+            pass
+
     return {
-        "labels": [r[0] for r in rows],
-        "values": [float(r[1]) for r in rows],
+        "labels": labels,
+        "values": values,
     }
 
 @app.get("/api/metrics/cpu-temp", response_class=JSONResponse)
@@ -266,6 +287,60 @@ def load_1m_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/fan-rpm", response_class=JSONResponse)
 def fan_rpm_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("fan_rpm", window)
+
+@app.get("/api/metrics/cpu-freq", response_class=JSONResponse)
+def cpu_freq_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("cpu_freq", window)
+
+# --- Service Monitoring ---
+MONITORED_SERVICES = [
+    "nginx",
+    "orion-webapp",
+    "ssh",
+    "tailscaled",
+    "wpa_supplicant",
+    "cron",
+    "bluetooth",
+    "avahi-daemon"
+]
+
+@app.get("/api/services/status", response_class=JSONResponse)
+def get_service_status(user: str = Depends(authenticate)):
+    results = []
+    for service in MONITORED_SERVICES:
+        try:
+            # Check if active
+            res = subprocess.run(
+                ["systemctl", "is-active", service],
+                capture_output=True,
+                text=True
+            )
+            status = res.stdout.strip()
+            # Also get sub-state if needed, but is-active returns 'active' or 'inactive'/'failed'
+            processed_status = "running" if status == "active" else "stopped"
+            
+            # Map nice names
+            nice_name = service.replace(".service", "").replace("-", " ").title()
+            if service == "ssh": nice_name = "SSH"
+            if service == "nginx": nice_name = "NGINX (WebDAV)"
+            if service == "tailscaled": nice_name = "Tailscale"
+            if service == "cron": nice_name = "Cron Jobs"
+            if service == "avahi-daemon": nice_name = "mDNS (Avahi)"
+            if service == "orion-webapp": nice_name = "Uvicorn (FastAPI)"
+            if service == "wpa_supplicant": nice_name = "Wi-Fi"
+
+            results.append({
+                "id": service,
+                "name": nice_name,
+                "status": processed_status, # 'running', 'stopped'
+                "raw": status
+            })
+        except Exception as e:
+            results.append({"id": service, "name": service, "status": "error", "error": str(e)})
+            
+    return results
+
+@app.get("/api/metrics/disk-usage", response_class=JSONResponse)
 @app.get("/api/metrics/disk-usage", response_class=JSONResponse)
 def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("disk_usage", window)
@@ -294,3 +369,38 @@ def storage_status(user: str = Depends(authenticate)):
         return disks
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/api/metrics/room-temp", response_class=JSONResponse)
+def room_temp_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("room_temp", window)
+
+@app.get("/api/metrics/room-humidity", response_class=JSONResponse)
+def room_humidity_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("room_humidity", window)
+
+@app.get("/api/sensors/dht11", response_class=JSONResponse)
+def dht11_live(user: str = Depends(authenticate)):
+    """Live read from DHT11 sensor on GPIO 27"""
+    try:
+        result = subprocess.run(
+            ["/home/orion/server/venv/bin/python3", "-u", "-c",
+             "import board,adafruit_dht,time\n"
+             "d=adafruit_dht.DHT11(board.D27,use_pulseio=False)\n"
+             "for _ in range(5):\n"
+             " try:\n"
+             "  t,h=d.temperature,d.humidity\n"
+             "  if t is not None and h is not None:\n"
+             "   print(f'{t},{h}')\n"
+             "   break\n"
+             " except: pass\n"
+             " time.sleep(2)\n"
+             "d.exit()"],
+            capture_output=True, text=True, timeout=15
+        )
+        output = result.stdout.strip()
+        if output and ',' in output:
+            temp, hum = output.split(',')
+            return {"temperature": float(temp), "humidity": float(hum)}
+        return {"temperature": None, "humidity": None, "error": "Sensor returned no data"}
+    except Exception as e:
+        return {"temperature": None, "humidity": None, "error": str(e)}

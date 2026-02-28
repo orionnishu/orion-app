@@ -10,8 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/style.css">
     <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/admin.css">
-    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/home.css">
-    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/dashboard.css">
+    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/home.css?v=2">
+    <link rel="stylesheet" href="{{ request.scope.get('root_path', '') }}/static/dashboard.css?v=3">
 </head>
 
 <body>
@@ -19,12 +19,12 @@
     <header>
         {% set root = request.scope.get('root_path', '') %}
         {% set path = request.url.path %}
-        
+
         <a href="{{ root }}/" class="logo-container">
             <img src="{{ root }}/static/logo.png" alt="Orion Logo" class="logo">
             <h1>Orion Home Server</h1>
         </a>
-        
+
         <nav>
             <a href="{{ root }}/" class="{{ 'active' if path == root ~ '/' or path == root else '' }}">Home</a>
             <a href="{{ root }}/dashboard" class="{{ 'active' if '/dashboard' in path else '' }}">Dashboard</a>

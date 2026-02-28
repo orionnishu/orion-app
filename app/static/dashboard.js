@@ -4,8 +4,11 @@
 const BASE_PATH = window.BASE_PATH || '';
 let cpuTempChart;
 let ramChart;
+let cpuFreqChart;
 let loadChart;
 let fanChart;
+let roomTempChart;
+let roomHumidityChart;
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -37,12 +40,16 @@ const colors = {
 function getMetricTheme(value, metric) {
   switch (metric) {
     case "cpu_temp":
-      if (value <= 50) return colors.green;
-      if (value <= 68) return colors.orange;
+      if (value <= 45) return colors.green;
+      if (value <= 65) return colors.orange;
       return colors.red;
 
+    case "cpu_freq":
+      if (value <= 2500) return colors.green;
+      return colors.orange;
+
     case "ram_used":
-      if (value <= 2000) return colors.green;
+      if (value <= 1800) return colors.green;
       if (value <= 2800) return colors.orange;
       return colors.red;
 
@@ -57,8 +64,19 @@ function getMetricTheme(value, metric) {
       return colors.red;
 
     case "disk_usage":
-      if (value <= 70) return colors.green;
-      if (value <= 90) return colors.orange;
+      if (value <= 50) return colors.green;
+      if (value <= 75) return colors.orange;
+      return colors.red;
+
+    case "room_temp":
+      if (value >= 18 && value <= 26) return colors.green;
+      // Orange: 10-18 OR 26-36
+      if ((value >= 10 && value < 18) || (value > 26 && value <= 36)) return colors.orange;
+      return colors.red;
+
+    case "room_humidity":
+      if (value >= 30 && value <= 50) return colors.green;
+      if (value < 30 || (value > 50 && value <= 70)) return colors.orange;
       return colors.red;
 
     default:
@@ -141,9 +159,12 @@ function createLineChart(canvasId, label) {
 // --------------------
 function initCharts() {
   cpuTempChart = createLineChart("cpuTempChart", "CPU Temp");
+  cpuFreqChart = createLineChart("cpuFreqChart", "Freq (MHz)");
   ramChart = createLineChart("ramChart", "RAM Used");
   loadChart = createLineChart("loadChart", "Load Avg");
   fanChart = createLineChart("fanChart", "Fan RPM");
+  roomTempChart = createLineChart("roomTempChart", "Room Temp (°C)");
+  roomHumidityChart = createLineChart("roomHumidityChart", "Humidity (%)");
 }
 
 // --------------------
@@ -170,7 +191,15 @@ async function updateChart(chart, endpoint, metricName, valueId) {
       // Update the overview card value
       const valEl = document.getElementById(valueId);
       if (valEl) {
-        valEl.textContent = metricName === 'load_1m' ? latest.toFixed(2) : latest.toFixed(1);
+        if (metricName === 'cpu_freq') {
+          // Show GHz / Total
+          valEl.innerHTML = `${(latest / 1000).toFixed(1)} <span class="stat-total">/ 2.4 GHz</span>`;
+        } else if (metricName === 'ram_used') {
+          // Show GB / Total (4GB actual)
+          valEl.innerHTML = `${(latest / 1000).toFixed(1)} <span class="stat-total">/ 4.0 GB</span>`;
+        } else {
+          valEl.textContent = metricName === 'load_1m' ? latest.toFixed(2) : latest.toFixed(1);
+        }
         valEl.style.color = theme.border;
       }
     }
@@ -231,9 +260,12 @@ async function updateStorage() {
 // --------------------
 function refreshAll() {
   updateChart(cpuTempChart, BASE_PATH + "/api/metrics/cpu-temp", "cpu_temp", "val-cpu-temp");
+  updateChart(cpuFreqChart, BASE_PATH + "/api/metrics/cpu-freq", "cpu_freq", "val-cpu-freq");
   updateChart(ramChart, BASE_PATH + "/api/metrics/ram-used", "ram_used", "val-ram-used");
   updateChart(loadChart, BASE_PATH + "/api/metrics/load-1m", "load_1m", "val-load-1m");
   updateChart(fanChart, BASE_PATH + "/api/metrics/fan-rpm", "fan_rpm", "val-fan-rpm");
+  updateChart(roomTempChart, BASE_PATH + "/api/metrics/room-temp", "room_temp", "val-room-temp");
+  updateChart(roomHumidityChart, BASE_PATH + "/api/metrics/room-humidity", "room_humidity", "val-room-humidity");
   updateStorage();
 
   const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

@@ -186,3 +186,65 @@
     font-size: 0.8rem;
     color: #4b5563;
 }
+/* Services Section */
+.services-section {
+    margin-bottom: 2.5rem;
+}
+
+.services-section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+}
+
+.service-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+    .service-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.service-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.service-status {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #d1d5db; /* gray default */
+}
+
+.status-dot.running {
+    background-color: #10b981;
+}
+
+.status-dot.stopped {
+    background-color: #ef4444;
+}
+.status-dot.error {
+    background-color: #f59e0b;
+}
+.stat-total { font-size: 0.85em; color: #9ca3af; font-weight: 400; margin-left: 2px; }
