@@ -1,10 +1,9 @@
-#include <Arduino.h>
-#include <ESPmDNS.h>
-#include <WebServer.h>
 #include <WiFi.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
 
-const char *ssid = "PRAVEENARCHER";
-const char *password = "RP@30032019";
+const char* ssid = "PRAVEENARCHER";
+const char* password = "RP@30032019";
 
 WebServer server(80);
 
@@ -26,7 +25,7 @@ void setup() {
   Serial.println("Booting...");
 
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname("esp-mdr"); // DHCP hostname
+  WiFi.setHostname("esp-mdr");   // DHCP hostname
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -38,14 +37,16 @@ void setup() {
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
 
-  // Start mDNS after WiFi is connected.
+  // 🔥 Start mDNS AFTER WiFi connected
   if (MDNS.begin("esp-mdr")) {
     Serial.println("mDNS responder started");
   } else {
     Serial.println("Error setting up mDNS!");
   }
 
-  server.on("/", []() { server.send(200, "text/plain", "ESP32 is alive"); });
+  server.on("/", []() {
+    server.send(200, "text/plain", "ESP32 is alive");
+  });
 
   server.on("/message", handleMessage);
 
@@ -53,4 +54,6 @@ void setup() {
   Serial.println("HTTP server started");
 }
 
-void loop() { server.handleClient(); }
+void loop() {
+  server.handleClient();
+}

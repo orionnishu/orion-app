@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"name": "esp32",
+			"path": "esp32"
+		}
+	],
+	"settings": {
+		"C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+		"files.associations": {
+			"*.ino": "cpp"
+		}
+	}
+}
