@@ -10,7 +10,7 @@ MQTT_CMD_TOPIC="orion/pc/cmd"
 MQTT_STATUS_TOPIC="orion/pc/status"
 
 # Ethernet fallback (SSH sleep task)
-PC_HOSTNAME="192.168.0.102"
+PC_HOSTNAME="orion-desktoppc-wifi"
 
 {
   echo "========================================"
