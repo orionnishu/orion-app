@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 LOG_FILE="/var/log/orion/admin-actions.log"
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
-PC_HOSTNAME="orion-raspian-wifi"
+PC_HOSTNAME="orion-desktoppc-wifi"
 
 {
   echo "========================================"

@@ -46,7 +46,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # --------------------
 # PC config
 # --------------------
-PC_HOSTNAME = "orion-raspian-wifi"
+PC_HOSTNAME = "orion-desktoppc-wifi"
 SCRIPTS_DIR = Path("/home/orion/server/scripts")
 
 def is_pc_online() -> bool:
