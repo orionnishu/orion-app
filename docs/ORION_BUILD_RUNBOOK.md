@@ -20,7 +20,7 @@
 
 Assumptions:
 - Internet available via Wi‑Fi
-- Ethernet reserved for Pi ↔ PC private link
+- Ethernet Pi ↔ PC link is **optional** (legacy; ESP32 MQTT is the primary PC control method now)
 - Deployment is **manual**, never automatic
 
 ---
@@ -89,7 +89,10 @@ sudo netplan apply
 
 ---
 
-### 3.2 Ethernet (Pi ↔ PC Private Link)
+### 3.2 Ethernet (Pi ↔ PC Private Link) — OPTIONAL
+
+> [!NOTE]
+> The Ethernet link was originally used for Wake-on-LAN. This is now handled by the **ESP32 MQTT power controller** over Wi-Fi. The Ethernet link is kept as a fallback but is no longer required.
 
 Static IP, **no gateway**, no DNS.
 
@@ -140,7 +143,7 @@ mount -a
 ## 5. Core Packages
 
 ```bash
-sudo apt install -y   python3   python3-venv   python3-pip   sqlite3   nginx   ethtool
+sudo apt install -y   python3   python3-venv   python3-pip   sqlite3   nginx   ethtool   mosquitto   mosquitto-clients
 ```
 
 ---
@@ -375,6 +378,53 @@ These will be revisited later with care.
 
 ---
 
+## 13. MQTT Broker (Mosquitto)
+
+```bash
+sudo systemctl enable --now mosquitto
+```
+
+Verify:
+```bash
+systemctl status mosquitto
+mosquitto_sub -h 192.168.0.103 -t orion/pc/status -C 1
+# Expected: esp32_online (if ESP32 is powered on)
+```
+
+The broker runs on the Pi at `192.168.0.103:1883` and is used by:
+- **ESP32**: subscribes to `orion/pc/cmd`, publishes retained status on `orion/pc/status`
+- **Shell scripts**: `wakemypc.sh` and `sleepmypc.sh` use `mosquitto_pub`/`mosquitto_sub`
+- **FastAPI**: checks ESP32 status via `mosquitto_sub` for the services dashboard
+
+---
+
+## 14. ESP32 Firmware (Power Controller)
+
+The ESP32 board is wired in parallel with the PC power button. It receives MQTT commands and pulls GPIO4 HIGH to simulate a button press.
+
+```mermaid
+flowchart LR
+    Pi["Raspberry Pi"] -->|"mosquitto_pub<br/>orion/pc/cmd"| Broker["Mosquitto<br/>192.168.0.103"]
+    Broker -->|"MQTT subscribe"| ESP32["ESP32-MDR<br/>GPIO4"]
+    ESP32 -->|"pulse"| PC["PC Power Button"]
+    ESP32 -->|"orion/pc/status<br/>(retained + LWT)"| Broker
+```
+
+### Flash
+```bash
+cd ~/server/esp32
+pio run -t upload
+pio device monitor
+```
+
+### Verify
+```bash
+mosquitto_sub -h 192.168.0.103 -t orion/pc/status -C 1   # expect: esp32_online
+mosquitto_pub -h 192.0.103 -t orion/pc/cmd -m "pc/on_or_off"  # toggle PC power
+```
+
+---
+
 **End of Runbook**
 
 
@@ -414,7 +464,27 @@ These notes are preserved because:
   - Supported: FolderSync (primary), Material Files (browse)
   - Unsupported: Solid Explorer
 
-Detailed architecture lives in `docs/architecture.md`.
+Detailed architecture lives in `docs/ARCHITECTURE.md`.
+
+---
+
+## PART B.1 — PC CONTROL EVOLUTION
+
+```mermaid
+flowchart TB
+    subgraph "Legacy (Ethernet)"direction LR
+        PiE["Pi eth0<br/>192.168.50.2"] -->|WoL| PCE["PC eth<br/>192.168.50.x"]
+        PiE -->|SSH| PCE
+    end
+    subgraph "Current (MQTT over Wi-Fi)"
+        direction LR
+        PiW["Pi → mosquitto_pub"] --> Broker["Mosquitto<br/>192.168.0.103"]
+        Broker --> ESP["ESP32-MDR"]
+        ESP -->|GPIO4| PCW["PC Power Button"]
+    end
+```
+
+The system was originally designed with a direct Ethernet cable between the Pi and PC (separate 192.168.50.x subnet). This required mounting the Pi inside the PC cabinet. The ESP32 MQTT approach eliminated this physical dependency — the Pi and ESP32 communicate over Wi-Fi through the Mosquitto broker, and the ESP32 is wired to the PC power button in parallel.
 
 ---
 

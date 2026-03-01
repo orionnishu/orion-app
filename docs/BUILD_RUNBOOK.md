@@ -12,7 +12,7 @@
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y git curl vim ca-certificates python3-venv python3-pip python3-dev \
                     nginx nginx-extras libnginx-mod-http-dav-ext apache2-utils \
-                    lm-sensors sqlite3
+                    lm-sensors sqlite3 mosquitto mosquitto-clients
 
 # Set Timezone
 sudo timedatectl set-timezone Asia/Kolkata
@@ -76,7 +76,27 @@ sudo chmod 2775 /mnt/orion-nas/users /mnt/orion-nas/users/*
 
 ---
 
-## 📈 4. Pi-Monitor & Maintenance
+## 🔌 4. MQTT Broker (Mosquitto)
+
+### Enable & Start
+```bash
+sudo systemctl enable --now mosquitto
+```
+
+### Verify
+```bash
+systemctl status mosquitto
+# Test pub/sub from Pi
+mosquitto_pub -h 192.168.0.103 -t test -m "hello"
+mosquitto_sub -h 192.168.0.103 -t test -C 1
+```
+
+> [!NOTE]
+> The ESP32 connects to the broker at `192.168.0.103:1883`. Ensure the Pi's Wi-Fi IP matches this address, or update the ESP32 firmware accordingly.
+
+---
+
+## 📈 5. Pi-Monitor & Maintenance
 
 ### Stats Collection
 Ensure crontab (`crontab -e -u orion`) has:
@@ -90,7 +110,7 @@ Ensure crontab (`crontab -e -u orion`) has:
 
 ---
 
-## 🔒 5. Tailscale Serve (HTTPS Routing)
+## 🔒 6. Tailscale Serve (HTTPS Routing)
 
 ### Install & Authenticate
 ```bash
@@ -127,9 +147,38 @@ tailscale serve status
 
 ---
 
-## 🚀 6. Testing & Validation
+## 🔧 7. ESP32 Firmware (Power Controller)
+
+The ESP32 board controls the PC power button via GPIO4. It connects to the MQTT broker and listens for commands.
+
+### Flash Firmware
+```bash
+cd ~/server/esp32
+pio run -t upload
+pio device monitor   # verify "esp32_online" is published
+```
+
+### Verify MQTT Communication
+```bash
+# Check ESP32 retained status
+mosquitto_sub -h 192.168.0.103 -t orion/pc/status -C 1
+# Expected: esp32_online
+
+# Test power toggle
+mosquitto_pub -h 192.168.0.103 -t orion/pc/cmd -m "pc/on_or_off"
+```
+
+> [!IMPORTANT]
+> The ESP32 must be on the same Wi-Fi network (`PRAVEENARCHER`) and able to reach the broker at `192.168.0.103:1883`.
+
+---
+
+## 🚀 8. Testing & Validation
 
 - **Web App**: `curl http://127.0.0.1:8000/` (Expect 401)
 - **WebDAV**: `curl -u user:pass -X PROPFIND http://127.0.0.1:8082/`
 - **Sensors**: Run `sensors` to verify temperature visibility.
 - **HTTPS**: Access `https://orion-raspian.taila3b741.ts.net/` from a Tailscale device.
+- **MQTT Broker**: `systemctl status mosquitto`
+- **ESP32 Status**: `mosquitto_sub -h 192.168.0.103 -t orion/pc/status -C 1`
+- **PC Status**: `curl -u orion:pass http://127.0.0.1:8000/api/pc-status`
