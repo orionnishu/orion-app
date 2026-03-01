@@ -472,7 +472,8 @@ Detailed architecture lives in `docs/ARCHITECTURE.md`.
 
 ```mermaid
 flowchart TB
-    subgraph "Legacy (Ethernet)"direction LR
+    subgraph "Legacy (Ethernet)"
+        direction LR
         PiE["Pi eth0<br/>192.168.50.2"] -->|WoL| PCE["PC eth<br/>192.168.50.x"]
         PiE -->|SSH| PCE
     end
