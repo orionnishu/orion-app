@@ -6,6 +6,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import subprocess
 import secrets
 import sqlite3
+import socket
 import time
 import os
 from pathlib import Path
@@ -46,16 +47,28 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # --------------------
 # PC config
 # --------------------
-PC_HOSTNAME = "orion-desktoppc-wifi"
+PC_IP = "192.168.0.102"
 SCRIPTS_DIR = Path("/home/orion/server/scripts")
 
+_pc_last_check = 0.0
+_pc_last_result = False
+_PC_CACHE_TTL = 2.0
+
 def is_pc_online() -> bool:
-    result = subprocess.run(
-        ["ping", "-c", "1", "-W", "1", PC_HOSTNAME],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    return result.returncode == 0
+    global _pc_last_check, _pc_last_result
+
+    now = time.time()
+    if now - _pc_last_check < _PC_CACHE_TTL:
+        return _pc_last_result
+
+    _pc_last_check = now
+    try:
+        with socket.create_connection((PC_IP, 445), timeout=0.4):
+            _pc_last_result = True
+    except OSError:
+        _pc_last_result = False
+
+    return _pc_last_result
 
 @app.get("/api/pc-status", response_class=JSONResponse)
 def pc_status():
@@ -301,7 +314,8 @@ MONITORED_SERVICES = [
     "wpa_supplicant",
     "cron",
     "bluetooth",
-    "avahi-daemon"
+    "avahi-daemon",
+    "mosquitto"
 ]
 
 @app.get("/api/services/status", response_class=JSONResponse)
@@ -328,6 +342,7 @@ def get_service_status(user: str = Depends(authenticate)):
             if service == "avahi-daemon": nice_name = "mDNS (Avahi)"
             if service == "orion-webapp": nice_name = "Uvicorn (FastAPI)"
             if service == "wpa_supplicant": nice_name = "Wi-Fi"
+            if service == "mosquitto": nice_name = "Mosquitto (MQTT)"
 
             results.append({
                 "id": service,
@@ -337,10 +352,30 @@ def get_service_status(user: str = Depends(authenticate)):
             })
         except Exception as e:
             results.append({"id": service, "name": service, "status": "error", "error": str(e)})
-            
+
+    # --- ESP32 device status via MQTT retained message ---
+    try:
+        esp32_result = subprocess.run(
+            ["mosquitto_sub", "-h", "192.168.0.103", "-t", "orion/pc/status", "-C", "1", "-W", "2"],
+            capture_output=True, text=True, timeout=5
+        )
+        esp32_status = esp32_result.stdout.strip()
+        results.append({
+            "id": "esp32-master-bedroom",
+            "name": "ESP32 Master Bedroom",
+            "status": "running" if esp32_status == "esp32_online" else "stopped",
+            "raw": esp32_status or "unreachable"
+        })
+    except Exception:
+        results.append({
+            "id": "esp32-master-bedroom",
+            "name": "ESP32 Master Bedroom",
+            "status": "stopped",
+            "raw": "unreachable"
+        })
+
     return results
 
-@app.get("/api/metrics/disk-usage", response_class=JSONResponse)
 @app.get("/api/metrics/disk-usage", response_class=JSONResponse)
 def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("disk_usage", window)
@@ -348,7 +383,6 @@ def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/storage/status", response_class=JSONResponse)
 def storage_status(user: str = Depends(authenticate)):
     """Get real-time storage status for all physical disks"""
-    import subprocess
     try:
         result = subprocess.run(["df", "-h"], capture_output=True, text=True)
         lines = result.stdout.strip().split('\n')[1:]
