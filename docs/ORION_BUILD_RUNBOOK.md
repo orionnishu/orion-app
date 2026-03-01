@@ -400,7 +400,9 @@ The broker runs on the Pi at `192.168.0.103:1883` and is used by:
 
 ## 14. ESP32 Firmware (Power Controller)
 
-The ESP32 board is wired in parallel with the PC power button. It receives MQTT commands and pulls GPIO4 HIGH to simulate a button press.
+The ESP32 board is wired in parallel with the PC power button via a 2N2222 NPN transistor. It receives MQTT commands and pulls GPIO4 HIGH to simulate a button press.
+
+![ESP32 Power Circuit](esp32_power_circuit.svg)
 
 ```mermaid
 flowchart LR

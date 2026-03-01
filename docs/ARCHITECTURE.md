@@ -58,6 +58,9 @@ graph TB
 - **Hostname**: `esp-mdr`
 - **Firmware**: PlatformIO (see `esp32/`)
 - **Function**: Subscribes to MQTT topic `orion/pc/cmd`, shorts GPIO4 to simulate PC power button press.
+- **Circuit**: 2N2222 NPN transistor wired in parallel with the cabinet power button (see diagram below).
+
+![ESP32 Power Circuit](esp32_power_circuit.svg)
 - **Status**: Publishes retained `esp32_online` / `esp32_offline` (LWT) on `orion/pc/status`.
 - **Commands**:
 

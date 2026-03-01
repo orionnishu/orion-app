@@ -51,12 +51,42 @@ The ESP32 is wired in **parallel** with the PC's front-panel power button. When 
 
 ## Wiring
 
+![ESP32 PC Power Button Circuit](../docs/esp32_power_circuit.svg)
+
+### How the Circuit Works
+
+The 2N2222 NPN transistor acts as an open-collector switch wired **in parallel** with the PC cabinet power button. When GPIO4 goes HIGH, the transistor saturates and shorts the two MOBO header pins together — identical to pressing the physical button.
+
+### Component List
+
+| Ref | Component | Value | Purpose |
+|---|---|---|---|
+| Q1 | NPN Transistor | 2N2222 | Open-collector switch |
+| R1 | Resistor | 1 kΩ | GPIO4 to Base (drive current limiting) |
+| R2 | Resistor | 4.7 kΩ | Base to Emitter (pull-down, prevents floating) |
+
+### Connections
+
 ```
-ESP32 GPIO4 ──── PC Power Switch Header (+)
-ESP32 GND   ──── PC Power Switch Header (-)
+Motherboard F_PANEL Header (2 pins)
+  ├── PWR_SIGNAL ──────────────────── Collector (Q1)
+  └── PWR_GND   ──────────────────── Emitter  (Q1) ──── Common GND
+
+ESP32
+  GPIO4 ── R1 (1kΩ) ── Base (Q1)
+                            │
+                         R2 (4.7kΩ)
+                            │
+                        Emitter (Q1) / Common GND
+
+Cabinet Button (original, in parallel — unchanged)
+  ├── one wire ── PWR_SIGNAL (Collector node)
+  └── other wire ── PWR_GND  (Emitter node)
 ```
 
-> **Safety**: GPIO4 is tri-stated (INPUT mode) when idle and only driven HIGH during a pulse. This prevents accidental triggers on boot or reset.
+> **Safety**: GPIO4 is configured as `INPUT` (tri-state) when idle and only driven `HIGH` during a commanded pulse. This prevents accidental triggers on ESP32 boot or reset — the transistor stays off when the base is floating/low.
+
+> **Parallel wiring**: The existing cabinet power button remains wired and fully functional alongside the transistor circuit.
 
 ## Migrate an Arduino IDE Sketch
 
