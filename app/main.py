@@ -46,12 +46,12 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # --------------------
 # PC config
 # --------------------
-PC_IP = "192.168.50.2"
+PC_HOSTNAME = "orion-raspian-wifi"
 SCRIPTS_DIR = Path("/home/orion/server/scripts")
 
 def is_pc_online() -> bool:
     result = subprocess.run(
-        ["ping", "-c", "1", "-W", "1", PC_IP],
+        ["ping", "-c", "1", "-W", "1", PC_HOSTNAME],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
