@@ -7,6 +7,7 @@ import subprocess
 import secrets
 import sqlite3
 import socket
+import json
 import time
 import os
 from pathlib import Path
@@ -414,27 +415,40 @@ def room_humidity_series(window: str = "24h", user: str = Depends(authenticate))
 
 @app.get("/api/sensors/dht11", response_class=JSONResponse)
 def dht11_live(user: str = Depends(authenticate)):
-    """Live read from DHT11 sensor on GPIO 27"""
+    """Live read from DHT11 sensor via ESP32 MQTT (retained telemetry)"""
     try:
         result = subprocess.run(
-            ["/home/orion/server/venv/bin/python3", "-u", "-c",
-             "import board,adafruit_dht,time\n"
-             "d=adafruit_dht.DHT11(board.D27,use_pulseio=False)\n"
-             "for _ in range(5):\n"
-             " try:\n"
-             "  t,h=d.temperature,d.humidity\n"
-             "  if t is not None and h is not None:\n"
-             "   print(f'{t},{h}')\n"
-             "   break\n"
-             " except: pass\n"
-             " time.sleep(2)\n"
-             "d.exit()"],
-            capture_output=True, text=True, timeout=15
+            ["mosquitto_sub", "-h", "192.168.0.103", "-t", "orion/esp32/telemetry/dht", "-C", "1", "-W", "3"],
+            capture_output=True, text=True, timeout=5
         )
-        output = result.stdout.strip()
-        if output and ',' in output:
-            temp, hum = output.split(',')
-            return {"temperature": float(temp), "humidity": float(hum)}
-        return {"temperature": None, "humidity": None, "error": "Sensor returned no data"}
+        data = json.loads(result.stdout.strip())
+        return {"temperature": data.get("temp"), "humidity": data.get("hum")}
     except Exception as e:
         return {"temperature": None, "humidity": None, "error": str(e)}
+
+    # --- [COMMENTED OUT] Original GPIO reading (DHT11 on Pi GPIO 27) ---
+    # Restore this block if sensor is moved back to the Pi.
+    # try:
+    #     result = subprocess.run(
+    #         ["/home/orion/server/venv/bin/python3", "-u", "-c",
+    #          "import board,adafruit_dht,time\n"
+    #          "d=adafruit_dht.DHT11(board.D27,use_pulseio=False)\n"
+    #          "for _ in range(5):\n"
+    #          " try:\n"
+    #          "  t,h=d.temperature,d.humidity\n"
+    #          "  if t is not None and h is not None:\n"
+    #          "   print(f'{t},{h}')\n"
+    #          "   break\n"
+    #          " except: pass\n"
+    #          " time.sleep(2)\n"
+    #          "d.exit()"],
+    #         capture_output=True, text=True, timeout=15
+    #     )
+    #     output = result.stdout.strip()
+    #     if output and ',' in output:
+    #         temp, hum = output.split(',')
+    #         return {"temperature": float(temp), "humidity": float(hum)}
+    #     return {"temperature": None, "humidity": None, "error": "Sensor returned no data"}
+    # except Exception as e:
+    #     return {"temperature": None, "humidity": None, "error": str(e)}
+

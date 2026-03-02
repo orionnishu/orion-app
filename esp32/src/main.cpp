@@ -1,9 +1,14 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <DHT.h>
 
 #define PWR_PIN 4
-#define FW_TAG "ORION_MQTT_ONLY_2026_03_01_D"
+#define DHT_PIN 5
+#define DHT_TYPE DHT11
+#define FW_TAG "ORION_MQTT_PWR_DHT_2026_03_02_A"
+
+DHT dht(DHT_PIN, DHT_TYPE);
 
 const char *ssid = "PRAVEENARCHER";
 const char *password = "RP@30032019";
@@ -15,11 +20,13 @@ const char *mqttClientId = "esp32-mdr";
 
 const char *mqttCmdTopic = "orion/pc/cmd";
 const char *mqttStatusTopic = "orion/pc/status";
+const char *mqttDhtTopic = "orion/esp32/telemetry/dht";
 
 const unsigned long defaultPulseMs = 500;
 const unsigned long forceOffPulseMs = 5000;
 const unsigned long maxPulseMs = 8000;
 
+const unsigned long dhtIntervalMs = 15000;   // 15 sec
 const unsigned long mqttRetryMs = 3000;
 const unsigned long wifiRetryMs = 5000;
 
@@ -32,6 +39,7 @@ unsigned long pulseDuration = defaultPulseMs;
 
 unsigned long lastMqttAttempt = 0;
 unsigned long lastWifiAttempt = 0;
+unsigned long lastDhtRead = 0;
 
 // ------------------------------------------------------------
 // Publish transient event (non-retained)
@@ -40,6 +48,20 @@ void publishEvent(const char *msg) {
   if (mqttClient.connected()) {
     mqttClient.publish(mqttStatusTopic, msg, false);
   }
+}
+
+// ------------------------------------------------------------
+// Publish DHT telemetry (retained)
+// ------------------------------------------------------------
+void publishDht(float temp, float hum) {
+  if (!mqttClient.connected()) return;
+
+  char payload[64];
+  snprintf(payload, sizeof(payload),
+           "{\"temp\":%.1f,\"hum\":%.1f}",
+           temp, hum);
+
+  mqttClient.publish(mqttDhtTopic, payload, true); // retained
 }
 
 // ------------------------------------------------------------
@@ -75,7 +97,7 @@ void handleCommand(const String &rawCmd) {
   cmd.trim();
   cmd.toLowerCase();
 
-  if (cmd == "pc/on_or_off" || cmd == "pc/on" || cmd == "power/on" ) {
+  if (cmd == "pc/on_or_off" || cmd == "pc/on" || cmd == "power/on") {
     startPulse(defaultPulseMs);
     return;
   }
@@ -114,14 +136,13 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 // ------------------------------------------------------------
 void connectMqttIfNeeded() {
 
-  if (mqttClient.connected() || WiFi.status() != WL_CONNECTED) {
+  if (mqttClient.connected() || WiFi.status() != WL_CONNECTED)
     return;
-  }
 
-  const unsigned long now = millis();
-  if (now - lastMqttAttempt < mqttRetryMs) {
+  unsigned long now = millis();
+  if (now - lastMqttAttempt < mqttRetryMs)
     return;
-  }
+
   lastMqttAttempt = now;
 
   if (mqttClient.connect(
@@ -133,7 +154,6 @@ void connectMqttIfNeeded() {
       )) {
 
     mqttClient.subscribe(mqttCmdTopic);
-
     mqttClient.publish(mqttStatusTopic, "esp32_online", true);
   }
 }
@@ -143,14 +163,13 @@ void connectMqttIfNeeded() {
 // ------------------------------------------------------------
 void connectWiFiIfNeeded() {
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
     return;
-  }
 
-  const unsigned long now = millis();
-  if (now - lastWifiAttempt < wifiRetryMs) {
+  unsigned long now = millis();
+  if (now - lastWifiAttempt < wifiRetryMs)
     return;
-  }
+
   lastWifiAttempt = now;
 
   WiFi.begin(ssid, password);
@@ -163,11 +182,13 @@ void setup() {
 
   pinMode(PWR_PIN, OUTPUT);
   digitalWrite(PWR_PIN, LOW);
-  pinMode(PWR_PIN, INPUT);  // tri-state for safety
+  pinMode(PWR_PIN, INPUT);   // tri-state for safety
 
   Serial.begin(115200);
   delay(50);
   Serial.printf("FW: %s\n", FW_TAG);
+
+  dht.begin();
 
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(hostname);
@@ -192,10 +213,23 @@ void loop() {
     mqttClient.loop();
   }
 
+  // Handle pulse timing
   if (pulseActive && (millis() - pulseStart >= pulseDuration)) {
     digitalWrite(PWR_PIN, LOW);
-    pinMode(PWR_PIN, INPUT);  // tri-state after pulse
+    pinMode(PWR_PIN, INPUT);
     pulseActive = false;
     publishEvent("pulse_complete");
+  }
+
+  // Periodic DHT publish
+  if (millis() - lastDhtRead >= dhtIntervalMs) {
+    lastDhtRead = millis();
+
+    float temp = dht.readTemperature();
+    float hum  = dht.readHumidity();
+
+    if (!isnan(temp) && !isnan(hum)) {
+      publishDht(temp, hum);
+    }
   }
 }
