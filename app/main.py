@@ -289,9 +289,9 @@ def _metric_series(metric_name: str, window: str):
 def cpu_temp_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("cpu_temp", window)
 
-@app.get("/api/metrics/cpu-stress", response_class=JSONResponse)
-def cpu_stress_series(window: str = "24h", user: str = Depends(authenticate)):
-    return _metric_series("cpu_stress", window)
+@app.get("/api/metrics/cpu-utilization", response_class=JSONResponse)
+def cpu_util_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("cpu_util_index", window)
 
 @app.get("/api/metrics/ram-used", response_class=JSONResponse)
 def ram_used_series(window: str = "24h", user: str = Depends(authenticate)):

@@ -4,7 +4,7 @@
 const BASE_PATH = window.BASE_PATH || '';
 let cpuTempChart;
 let ramChart;
-let cpuStressChart;
+let cpuUtilChart;
 let fanChart;
 let roomTempChart;
 let roomHumidityChart;
@@ -43,9 +43,9 @@ function getMetricTheme(value, metric) {
       if (value <= 70) return colors.orange;
       return colors.red;
 
-    case "cpu_stress":
-      if (value <= 0.4) return colors.green;
-      if (value <= 0.8) return colors.orange;
+    case "cpu_util_index":
+      if (value <= 25) return colors.green;
+      if (value <= 60) return colors.orange;
       return colors.red;
 
     case "ram_used":
