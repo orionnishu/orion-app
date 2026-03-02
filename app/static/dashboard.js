@@ -264,7 +264,7 @@ async function updateStorage() {
 // Refresh all data
 // --------------------
 function refreshAll() {
-  updateChart(cpuStressChart, BASE_PATH + "/api/metrics/cpu-stress", "cpu_stress", "val-cpu-stress");
+  updateChart(cpuUtilChart, BASE_PATH + "/api/metrics/cpu-utilization", "cpu_util_index", "val-cpu-util");
   updateChart(cpuTempChart, BASE_PATH + "/api/metrics/cpu-temp", "cpu_temp", "val-cpu-temp");
   updateChart(ramChart, BASE_PATH + "/api/metrics/ram-used", "ram_used", "val-ram-used");
   updateChart(fanChart, BASE_PATH + "/api/metrics/fan-rpm", "fan_rpm", "val-fan-rpm");
