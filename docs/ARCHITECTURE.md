@@ -62,6 +62,7 @@ graph TB
 
 ![ESP32 Power Circuit](esp32_power_circuit.svg)
 - **Status**: Publishes retained `esp32_online` / `esp32_offline` (LWT) on `orion/pc/status`.
+- **DHT11 Telemetry**: Publishes retained `{"temp":25.0,"hum":60.0}` on `orion/esp32/telemetry/dht` every 15s.
 - **Commands**:
 
   | Command | Action |
@@ -80,6 +81,8 @@ graph TB
 - **Path**: `/home/orion/server/services/pi-monitor/`
 - **DB**: SQLite (`pi-monitor.db`)
 - **Collection**: Every minute via cron (`pi-monitor.sh`)
+- **Metrics**: `cpu_temp`, `board_temp`, `fan_rpm`, `fan_pwm`, `cpu_freq`, `ram_used`, `load_1m`, `cpu_stress`, `room_temp`, `room_humidity`, `disk_usage_*`
+- **Room Sensor**: DHT11 data read via ESP32 MQTT (`orion/esp32/telemetry/dht`), not GPIO.
 - **Archival**: Weekly aggregation and pruning (`archive_weekly.sql`).
 
 ### 1.6 Tailscale
@@ -119,7 +122,35 @@ The homepage displays live status for all monitored services:
 
 ---
 
-## 4. Storage Design
+## 4. Dashboard Metrics
+
+The dashboard displays time-series charts with color-coded thresholds. Data refreshes every 30 seconds.
+
+### CPU Stress Index
+
+A composite metric that normalizes system load against available CPU headroom:
+
+```
+cpu_stress = (load_1m / cores) / (current_freq / max_freq)
+```
+
+Where `cores = 4`, `max_freq = 2500 MHz`. A value of 1.0 means the CPU is at capacity.
+
+### Chart Configuration
+
+| Metric | Y-Axis | 🟢 Green | 🟠 Amber | 🔴 Red |
+|---|---|---|---|---|
+| CPU Temp | 30–85°C | ≤ 52°C | 52–70°C | > 70°C |
+| CPU Stress Index | 0–2 | ≤ 0.4 | 0.4–0.8 | > 0.8 |
+| RAM Used | 0–4096 MB | ≤ 2000 | 2000–3000 | > 3000 |
+| Disk Usage | 0–100% | ≤ 60% | 60–80% | > 80% |
+| Fan RPM | 0–6000 | ≤ 3000 | 3000–4500 | > 4500 |
+| Room Temp | 10–40°C | 18–30°C | 10–18 / 30–35 | < 10 / > 35 |
+| Humidity | 0–100% | 30–60% | 20–30 / 60–70 | < 20 / > 70 |
+
+---
+
+## 5. Storage Design
 
 The system uses a dedicated USB drive mounted at `/mnt/orion-nas`.
 - **Filesystem**: ext4
@@ -134,7 +165,7 @@ The system uses a dedicated USB drive mounted at `/mnt/orion-nas`.
 
 ---
 
-## 5. Client Support
+## 6. Client Support
 
 - **Primary**: FolderSync (Android)
 - **Secondary**: curl, rclone, native OS WebDAV mounting.
@@ -142,23 +173,23 @@ The system uses a dedicated USB drive mounted at `/mnt/orion-nas`.
 
 ---
 
-## 6. Maintenance
+## 7. Maintenance
 
 - **Backups**: Scripts in `scripts/` (e.g., `pisync_to_pc.sh`) handle intermittent backups.
 - **Cleanup**: Weekly database archival ensures the monitoring database remains performant.
 
 ---
 
-## 7. System Integration
+## 8. System Integration
 
 To ensure high portability, core system configurations are stored in the repository under `system_configs/` and symlinked to their respective system locations.
 
-### 7.1 Repository Managed (Internal)
+### 8.1 Repository Managed (Internal)
 *   **Systemd**: `system_configs/systemd/orion-webapp.service` → `/etc/systemd/system/`
 *   **Nginx**: `system_configs/nginx/orion-webdav` → `/etc/nginx/sites-available/`
 *   **Cron**: `system_configs/cron/crontab.txt` (Template source for `crontab -e`)
 
-### 7.2 System Only (External)
+### 8.2 System Only (External)
 The following items **cannot** be in the repository for security or technical reasons:
 *   **Secrets**: `/etc/nginx/dav/users.htpasswd` (Passwords).
 *   **Mounts**: `/etc/fstab` (System-specific UUIDs).

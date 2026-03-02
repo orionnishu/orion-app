@@ -29,6 +29,19 @@ RAM_USED=$(/usr/bin/free -m | awk '/Mem:/ {print $3}')
 LOAD=$(/usr/bin/uptime | awk -F'load average:' '{print $2}')
 LOAD_1M=$(echo "$LOAD" | cut -d',' -f1 | tr -d ' ')
 
+# --- CPU Stress Index ---
+# Formula: (load_1m / cores) / (freq_mhz / max_freq)
+CORES=4
+MAX_FREQ=2500
+FREQ_NUM=$(echo "$FREQ" | sed 's/ MHz//')
+CPU_STRESS=$(/home/orion/server/venv/bin/python3 -c "
+l = float('${LOAD_1M}' or 0)
+f = float('${FREQ_NUM}' or 1)
+stress = (l / $CORES) / (f / $MAX_FREQ) if f > 0 else 0
+print(f'{stress:.3f}')
+" 2>/dev/null)
+CPU_STRESS=${CPU_STRESS:-0}
+
 # --- Room Sensor (DHT11 via ESP32 MQTT) ---
 # Read retained telemetry from ESP32 over MQTT (JSON: {"temp":25.0,"hum":60.0})
 DHT_JSON=$(mosquitto_sub -h 192.168.0.103 -t "orion/esp32/telemetry/dht" -C 1 -W 3 2>/dev/null)
@@ -80,7 +93,7 @@ while read -r line; do
 done < <(df -h | grep '^/dev/')
 
 # --- Log ---
-echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD | Room:${ROOM_TEMP}C/${ROOM_HUM}%$DISK_LOG" >> "$LOG_PATH"
+echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD | Stress:$CPU_STRESS | Room:${ROOM_TEMP}C/${ROOM_HUM}%$DISK_LOG" >> "$LOG_PATH"
 
 # --- DB entry ---
 sqlite3 "$DB_PATH" <<EOF
@@ -91,5 +104,6 @@ INSERT INTO metrics (ts, source, name, value, unit) VALUES
 ('$TS','$SOURCE', 'fan_pwm', '${FAN_PWM%\%}', '%'),
 ('$TS','$SOURCE', 'cpu_freq', '${FREQ% MHz}', 'MHz'),
 ('$TS','$SOURCE', 'ram_used', '$RAM_USED', 'MB'),
-('$TS','$SOURCE', 'load_1m', '$LOAD_1M', 'load')$ROOM_SQL$DISK_SQL;
+('$TS','$SOURCE', 'load_1m', '$LOAD_1M', 'load'),
+('$TS','$SOURCE', 'cpu_stress', '$CPU_STRESS', 'index')$ROOM_SQL$DISK_SQL;
 EOF

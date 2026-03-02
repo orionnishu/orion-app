@@ -236,7 +236,6 @@ DB_PATH = "/home/orion/server/services/pi-monitor/db/pi-monitor.db"
 
 WINDOW_MAP = {
     "1h": "-1 hours",
-    "2h": "-2 hours",
     "6h": "-6 hours",
     "24h": "-24 hours",
     "7d": "-7 days",
@@ -289,6 +288,10 @@ def _metric_series(metric_name: str, window: str):
 @app.get("/api/metrics/cpu-temp", response_class=JSONResponse)
 def cpu_temp_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("cpu_temp", window)
+
+@app.get("/api/metrics/cpu-stress", response_class=JSONResponse)
+def cpu_stress_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("cpu_stress", window)
 
 @app.get("/api/metrics/ram-used", response_class=JSONResponse)
 def ram_used_series(window: str = "24h", user: str = Depends(authenticate)):

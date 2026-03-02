@@ -19,6 +19,7 @@ The ESP32 is wired in **parallel** with the PC's front-panel power button. When 
 |---|---|---|
 | `orion/pc/cmd` | Subscribe | Receives power commands |
 | `orion/pc/status` | Publish (retained) | `esp32_online` / `esp32_offline` (LWT) |
+| `orion/esp32/telemetry/dht` | Publish (retained) | `{"temp":25.0,"hum":60.0}` every 15s |
 
 ### Commands
 

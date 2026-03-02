@@ -11,7 +11,7 @@
     <div class="dashboard-controls">
       <select id="timeWindow">
         <option value="1h">Last 1 hour</option>
-        <option value="2h">Last 2 hours</option>
+
         <option value="6h">Last 6 hours</option>
         <option value="24h" selected>Last 24 hours</option>
         <option value="7d">Last 7 days</option>
@@ -23,15 +23,9 @@
   <!-- Quick Glance Section -->
   <section class="stats-overview">
     <div class="stat-card">
-      <span class="stat-label">CPU Freq</span>
+      <span class="stat-label">CPU Stress</span>
       <div>
-        <span class="stat-value" id="val-cpu-freq">--</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">RAM Usage</span>
-      <div>
-        <span class="stat-value" id="val-ram-used">--</span>
+        <span class="stat-value" id="val-cpu-stress">--</span>
       </div>
     </div>
     <div class="stat-card">
@@ -42,9 +36,9 @@
       </div>
     </div>
     <div class="stat-card">
-      <span class="stat-label">Load Avg (1m)</span>
+      <span class="stat-label">RAM Usage</span>
       <div>
-        <span class="stat-value" id="val-load-1m">--</span>
+        <span class="stat-value" id="val-ram-used">--</span>
       </div>
     </div>
     <div class="stat-card">
@@ -73,16 +67,9 @@
   <!-- Main Charts Section -->
   <div class="charts-grid">
     <div class="chart-card">
-      <h3>⚡ CPU Frequency</h3>
+      <h3>🧠 CPU Stress Index</h3>
       <div class="chart-container">
-        <canvas id="cpuFreqChart"></canvas>
-      </div>
-    </div>
-
-    <div class="chart-card">
-      <h3>💾 RAM Usage</h3>
-      <div class="chart-container">
-        <canvas id="ramChart"></canvas>
+        <canvas id="cpuStressChart"></canvas>
       </div>
     </div>
 
@@ -94,9 +81,9 @@
     </div>
 
     <div class="chart-card">
-      <h3>⚖️ Load Average</h3>
+      <h3>💾 RAM Usage</h3>
       <div class="chart-container">
-        <canvas id="loadChart"></canvas>
+        <canvas id="ramChart"></canvas>
       </div>
     </div>
 
@@ -134,5 +121,5 @@
 
 <script>window.BASE_PATH = '{{ base }}';</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{{ base }}/static/dashboard.js?v=7"></script>
+<script src="{{ base }}/static/dashboard.js?v=8"></script>
 {% endblock %}
