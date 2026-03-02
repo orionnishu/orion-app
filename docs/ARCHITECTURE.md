@@ -126,22 +126,22 @@ The homepage displays live status for all monitored services:
 
 The dashboard displays time-series charts with color-coded thresholds. Data refreshes every 30 seconds.
 
-### CPU Stress Index
+### CPU Utilization Index (%)
 
-A composite metric that normalizes system load against available CPU headroom:
+A composite metric that normalizes system load against available CPU headroom, expressed as a percentage:
 
 ```
-cpu_stress = (load_1m / cores) / (current_freq / max_freq)
+cpu_util_index = 100 * (load_1m / cores) / (current_freq / max_freq)
 ```
 
-Where `cores = 4`, `max_freq = 2500 MHz`. A value of 1.0 means the CPU is at capacity.
+Where `cores = 4`, `max_freq = 2500 MHz`. A value of 100% means the CPU is fully loaded at current frequency.
 
 ### Chart Configuration
 
 | Metric | Y-Axis | 🟢 Green | 🟠 Amber | 🔴 Red |
 |---|---|---|---|---|
 | CPU Temp | 30–85°C | ≤ 52°C | 52–70°C | > 70°C |
-| CPU Stress Index | 0–2 | ≤ 0.4 | 0.4–0.8 | > 0.8 |
+| CPU Utilization | 0–120% | ≤ 25% | 25–60% | > 60% |
 | RAM Used | 0–4096 MB | ≤ 2000 | 2000–3000 | > 3000 |
 | Disk Usage | 0–100% | ≤ 60% | 60–80% | > 80% |
 | Fan RPM | 0–6000 | ≤ 3000 | 3000–4500 | > 4500 |

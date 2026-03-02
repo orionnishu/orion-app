@@ -81,7 +81,7 @@ function getMetricTheme(value, metric) {
 // Y-axis ranges per metric
 const Y_AXIS_RANGES = {
   cpu_temp: { min: 30, max: 85 },
-  cpu_stress: { min: 0, max: 2 },
+  cpu_util_index: { min: 0, max: 120 },
   ram_used: { min: 0, max: 4096 },
   fan_rpm: { min: 0, max: 6000 },
   room_temp: { min: 10, max: 40 },
@@ -165,7 +165,7 @@ function createLineChart(canvasId, label, metricName) {
 // Init charts once
 // --------------------
 function initCharts() {
-  cpuStressChart = createLineChart("cpuStressChart", "CPU Stress", "cpu_stress");
+  cpuUtilChart = createLineChart("cpuUtilChart", "CPU Util (%)", "cpu_util_index");
   cpuTempChart = createLineChart("cpuTempChart", "CPU Temp (°C)", "cpu_temp");
   ramChart = createLineChart("ramChart", "RAM Used (MB)", "ram_used");
   fanChart = createLineChart("fanChart", "Fan RPM", "fan_rpm");
@@ -200,8 +200,8 @@ async function updateChart(chart, endpoint, metricName, valueId) {
         if (metricName === 'ram_used') {
           // Show GB / Total (4GB actual)
           valEl.innerHTML = `${(latest / 1000).toFixed(1)} <span class="stat-total">/ 4.0 GB</span>`;
-        } else if (metricName === 'cpu_stress') {
-          valEl.textContent = latest.toFixed(2);
+        } else if (metricName === 'cpu_util_index') {
+          valEl.textContent = latest.toFixed(1) + '%';
         } else {
           valEl.textContent = latest.toFixed(1);
         }
