@@ -33,15 +33,41 @@ python3 -m venv venv
 
 ## 📂 2. Storage Setup
 
-### USB Mount
+### 2a. WebDAV USB Stick (`/mnt/orion-nas`)
 1. Identify drive: `lsblk`
-2. Format (EXT4): `sudo mkfs.ext4 -L orion-nas /dev/sdb` (Double check dev name!)
+2. Format (EXT4): `sudo mkfs.ext4 -L orion-nas /dev/sdb` (double-check dev name!)
 3. Find UUID: `blkid /dev/sdb`
 4. Update `/etc/fstab`:
    ```bash
    UUID=<YOUR_UUID> /mnt/orion-nas ext4 defaults,nofail 0 2
    ```
 5. Apply: `sudo mkdir -p /mnt/orion-nas && sudo mount -a`
+
+### 2b. WD External HDD (two partitions — media + Docker/Jellyfin data)
+
+The WD HDD is pre-partitioned. Mount both partitions by UUID (never by `/dev/sdaX`):
+
+```bash
+sudo mkdir -p /mnt/orion-media /mnt/orion-data
+```
+
+Add to `/etc/fstab`:
+```fstab
+# NTFS media partition — read-only for Jellyfin
+UUID=8A28D0A828D09493  /mnt/orion-media  ntfs3  ro,noatime,nofail,x-systemd.device-timeout=10  0  0
+
+# ext4 data partition — Docker data root + Jellyfin config/cache
+UUID=86ef87e2-b8c4-4ef7-bad2-b52c2e459cdc  /mnt/orion-data  ext4  defaults,noatime,nofail  0  2
+```
+
+```bash
+sudo mount -a
+df -h /mnt/orion-media /mnt/orion-data   # verify both mounted
+```
+
+> [!NOTE]
+> `nofail` on both entries is critical — ensures the Pi boots normally even if the HDD is absent.
+> Docker will fail to start if `/mnt/orion-data` is missing, but the system stays up.
 
 ### Directory Permissions
 ```bash
@@ -110,7 +136,7 @@ Ensure crontab (`crontab -e -u orion`) has:
 
 ---
 
-## 🔒 6. Tailscale Serve (HTTPS Routing)
+## 🔒 6. Tailscale Funnel (HTTPS Routing)
 
 ### Install & Authenticate
 ```bash
@@ -119,31 +145,32 @@ sudo tailscale up
 # Follow the authentication URL
 ```
 
-### Configure Path-Based Routing
+### Configure Route: Root → nginx (WebDAV + Jellyfin proxy)
 ```bash
-# Route root to FastAPI (port 8000)
-sudo tailscale serve --bg 8000
+# Route / to nginx on 8082 (handles both WebDAV and /jellyfin)
+sudo tailscale funnel --bg http://127.0.0.1:8082
 
-# Route /dav to WebDAV (port 8082)
-sudo tailscale serve --bg --set-path /dav http://127.0.0.1:8082
+# Route /app to FastAPI dashboard
+sudo tailscale serve --bg /app http://127.0.0.1:8000
 ```
 
-### Generate HTTPS Certificate
+### Enable Funnel (public internet access)
 ```bash
-sudo tailscale cert orion-raspian.taila3b741.ts.net
+sudo tailscale funnel --bg http://127.0.0.1:8082   # re-run with funnel to make it public
 ```
 
-### Verify Configuration
+### Verify
 ```bash
-tailscale serve status
-# Expected output:
-# https://orion-raspian.taila3b741.ts.net (tailnet only)
-# |-- /    proxy http://127.0.0.1:8000
-# |-- /dav proxy http://127.0.0.1:8082
+tailscale funnel status
+# Expected:
+# https://orion-raspian.taila3b741.ts.net (Funnel on)
+# |-- /    proxy http://127.0.0.1:8082
+# |-- /app proxy http://127.0.0.1:8000
 ```
 
 > [!NOTE]
-> If browsers show certificate warnings, restart the Tailscale client on the accessing device and clear browser cache.
+> `/jellyfin` is routed at the nginx level (inside the 8082 server block), not as a separate Tailscale route.
+> This version of Tailscale CLI does not support per-path Funnel routes beyond root.
 
 ---
 
@@ -173,7 +200,98 @@ mosquitto_pub -h 192.168.0.103 -t orion/pc/cmd -m "pc/on_or_off"
 
 ---
 
-## 🚀 8. Testing & Validation
+## 🎬 9. Docker & Jellyfin
+
+### 9.1 Install Docker
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker orion
+```
+
+### 9.2 Move Docker data root to HDD
+```bash
+sudo systemctl stop docker docker.socket
+
+# Migrate existing data
+sudo mkdir -p /mnt/orion-data/docker
+sudo rsync -aHAX --info=progress2 /var/lib/docker/ /mnt/orion-data/docker/
+
+# Configure new root
+sudo nano /etc/docker/daemon.json
+```
+
+`/etc/docker/daemon.json`:
+```json
+{
+  "data-root": "/mnt/orion-data/docker"
+}
+```
+
+```bash
+sudo systemctl start docker
+docker info | grep "Docker Root Dir"   # expected: /mnt/orion-data/docker
+```
+
+### 9.3 Deploy Jellyfin
+```bash
+sudo mkdir -p /opt/orion-docker/jellyfin
+sudo mkdir -p /mnt/orion-data/jellyfin/{config,cache}
+```
+
+`/opt/orion-docker/jellyfin/docker-compose.yml`:
+```yaml
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - /mnt/orion-data/jellyfin/config:/config
+      - /mnt/orion-data/jellyfin/cache:/cache
+      - /mnt/orion-media:/media:ro
+    environment:
+      - TZ=Asia/Kolkata
+    devices:
+      - /dev/dri:/dev/dri
+```
+
+```bash
+cd /opt/orion-docker/jellyfin
+sudo docker compose up -d
+docker ps   # verify 'jellyfin' is Up
+```
+
+### 9.4 Configure Jellyfin BaseUrl (required for Tailscale proxy)
+
+Edit `/mnt/orion-data/jellyfin/config/config/network.xml`:
+```xml
+<BaseUrl>/jellyfin</BaseUrl>
+<EnableRemoteAccess>true</EnableRemoteAccess>
+<KnownProxies>
+  <string>127.0.0.1</string>
+</KnownProxies>
+```
+
+Then restart the container:
+```bash
+docker restart jellyfin
+curl -s http://localhost:8096/jellyfin/health   # should return 200
+```
+
+### 9.5 Verify full stack
+```bash
+# Jellyfin reachable via nginx proxy (Tailscale path)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/jellyfin/health   # 200
+
+# WebDAV still protected
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/   # 401
+```
+
+---
+
+## 🚀 10. Testing & Validation
 
 - **Web App**: `curl http://127.0.0.1:8000/` (Expect 401)
 - **WebDAV**: `curl -u user:pass -X PROPFIND http://127.0.0.1:8082/`

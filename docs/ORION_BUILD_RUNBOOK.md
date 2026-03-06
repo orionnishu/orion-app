@@ -427,7 +427,48 @@ mosquitto_pub -h 192.0.103 -t orion/pc/cmd -m "pc/on_or_off"  # toggle PC power
 
 ---
 
+---
+
+## 15. Docker & Jellyfin (Added 2026-03)
+
+> [!NOTE]
+> This section describes the setup added after the initial build.
+> The authoritative step-by-step process lives in `docs/BUILD_RUNBOOK.md` § 9.
+
+### Quick summary
+
+| Item | Value |
+|---|---|
+| Docker data root | `/mnt/orion-data/docker` (on WD HDD ext4 partition) |
+| Jellyfin compose | `/opt/orion-docker/jellyfin/docker-compose.yml` |
+| Jellyfin config | `/mnt/orion-data/jellyfin/config/` |
+| Jellyfin media | `/mnt/orion-media` (read-only, NTFS) |
+| Access URL | `https://orion-raspian.taila3b741.ts.net/jellyfin` |
+
+### Tailscale routing (CORRECTED from earlier notes)
+
+The Tailscale routing changed when Jellyfin was added. **The table in section 8 above is outdated.** Current state:
+
+```bash
+# / → nginx 8082 (WebDAV at /, Jellyfin at /jellyfin internally)
+sudo tailscale funnel --bg http://127.0.0.1:8082
+
+# /app → FastAPI 8000 (ORION dashboard)
+sudo tailscale serve --bg /app http://127.0.0.1:8000
+```
+
+```
+https://orion-raspian.taila3b741.ts.net (Funnel on)
+|-- /    proxy http://127.0.0.1:8082
+|-- /app proxy http://127.0.0.1:8000
+```
+
+nginx handles internal path routing: `/jellyfin/*` → Jellyfin, `/` → WebDAV.
+
+---
+
 **End of Runbook**
+
 
 
 †*******************

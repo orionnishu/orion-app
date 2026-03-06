@@ -9,12 +9,13 @@ This document describes the **actual working ORION architecture**.
 ```mermaid
 graph TB
     subgraph Internet
-        TS[Tailscale Network]
+        TS[Tailscale Funnel]
     end
 
     subgraph "Raspberry Pi 5"
         FastAPI["FastAPI :8000<br/>Dashboard & Control Plane"]
-        Nginx["Nginx WebDAV :8082<br/>Multi-user NAS"]
+        Nginx["Nginx :8082<br/>WebDAV + Jellyfin proxy"]
+        Jellyfin["Jellyfin :8096<br/>Docker container"]
         Mosquitto["Mosquitto :1883<br/>MQTT Broker"]
         PiMon["Pi-Monitor<br/>Cron + SQLite"]
         Tailscale["Tailscale Serve<br/>HTTPS Routing"]
@@ -28,14 +29,22 @@ graph TB
         PC["Windows PC<br/>192.168.0.102"]
     end
 
+    subgraph "WD HDD (USB)"
+        HDD1["/mnt/orion-media<br/>NTFS 1.4TB — read-only"]
+        HDD2["/mnt/orion-data<br/>ext4 48GB — Docker + Jellyfin"]
+    end
+
     TS <--> Tailscale
-    Tailscale -->|"/"| FastAPI
-    Tailscale -->|"/dav"| Nginx
-    FastAPI -->|"mosquitto_sub/pub"| Mosquitto
+    Tailscale -->"|/"| Nginx
+    Tailscale -->"|/app"| FastAPI
+    Nginx -->"|/jellyfin"| Jellyfin
+    FastAPI -->"|mosquitto_sub/pub"| Mosquitto
     Mosquitto <-->|"orion/pc/cmd<br/>orion/pc/status"| ESP32
-    ESP32 -->|"GPIO4 pulse"| PC
-    FastAPI -->|"Port 445 check"| PC
-    PiMon -->|"metrics"| FastAPI
+    ESP32 -->"|GPIO4 pulse"| PC
+    FastAPI -->"|Port 445 check"| PC
+    PiMon -->"|metrics"| FastAPI
+    Jellyfin --- HDD1
+    HDD2 --- Jellyfin
 ```
 
 ---
@@ -48,10 +57,11 @@ graph TB
 - **Purpose**: Metrics visualization, system control, admin interface, service monitoring.
 - **PC Detection**: Socket check on port 445 (SMB) with 2-second TTL cache — replaces the older `ping` method.
 
-### 1.2 Nginx WebDAV
+### 1.2 Nginx (WebDAV + Jellyfin Proxy)
 - **Port**: `8082`
-- **Auth**: Basic Auth via `/etc/nginx/dav/users.htpasswd`
-- **Storage**: `/mnt/orion-nas/users/$remote_user/`
+- **Config**: `/etc/nginx/sites-available/orion-webdav` (symlinked to `system_configs/nginx/orion-webdav`)
+- **Location `/jellyfin`**: Proxies to Jellyfin on `127.0.0.1:8096` — no auth (Jellyfin handles its own login). WebSocket upgrade headers included for sync play / live TV.
+- **Location `/`**: WebDAV — Basic Auth via `/etc/nginx/dav/users.htpasswd`, per-user directory isolation via `alias /mnt/orion-nas/users/$remote_user/`.
 - **Features**: Multi-user isolation, setgid permissions for group persistence.
 
 ### 1.3 ESP32 Power Controller (Master Bedroom)
@@ -85,11 +95,25 @@ graph TB
 - **Room Sensor**: DHT11 data read via ESP32 MQTT (`orion/esp32/telemetry/dht`), not GPIO.
 - **Archival**: Weekly aggregation and pruning (`archive_weekly.sql`).
 
-### 1.6 Tailscale
+### 1.6 Jellyfin (Docker)
+- **Container**: `jellyfin` (image: `jellyfin/jellyfin:latest`, `restart: unless-stopped`)
+- **Port**: `8096`
+- **Compose file**: `/opt/orion-docker/jellyfin/docker-compose.yml`
+- **Docker data root**: `/mnt/orion-data/docker` (moved off SD card via `/etc/docker/daemon.json`)
+- **Volumes**:
+  - `/mnt/orion-data/jellyfin/config` → `/config`
+  - `/mnt/orion-data/jellyfin/cache` → `/cache`
+  - `/mnt/orion-media` → `/media` (read-only)
+- **BaseUrl**: `/jellyfin` (configured in `network.xml` so paths resolve correctly through the nginx proxy)
+- **Hardware accel**: `/dev/dri` passed through (configuration in Jellyfin UI pending)
+
+### 1.7 Tailscale
 - **DNS**: MagicDNS hostname (`orion-raspian`)
-- **Routing**: Tailscale Serve handles path-based routing:
-  - `/` → FastAPI (`8000`)
-  - `/dav` → Nginx WebDAV (`8082`)
+- **Mode**: Funnel (publicly accessible)
+- **Routing** (current):
+  - `/` → nginx port `8082` (routes internally to WebDAV or Jellyfin)
+  - `/app` → FastAPI port `8000` (ORION dashboard)
+  - `/jellyfin` → handled by nginx → Jellyfin port `8096`
 
 ---
 
@@ -152,9 +176,10 @@ Where `cores = 4`, `max_freq = 2500 MHz`. A value of 100% means the CPU is fully
 
 ## 5. Storage Design
 
-The system uses a dedicated USB drive mounted at `/mnt/orion-nas`.
-- **Filesystem**: ext4
-- **Mount**: Configured with `nofail` in `/etc/fstab`.
+### 5.1 WebDAV USB Stick
+- **Device**: `/dev/sdb`
+- **FS**: ext4, ~15 GB
+- **Mount**: `/mnt/orion-nas` (`nofail` in fstab)
 - **Structure**:
   ```
   /mnt/orion-nas/
@@ -162,6 +187,36 @@ The system uses a dedicated USB drive mounted at `/mnt/orion-nas`.
       ├── praveen_flip/
       └── ruchi_realme/
   ```
+
+### 5.2 WD External HDD (USB)
+
+The WD HDD (`/dev/sda`) hosts all media and Docker/Jellyfin data. Identified in fstab by UUID to survive replug or device reordering.
+
+| Partition | FS | Size | Mount | Mode | Purpose |
+|---|---|---|---|---|---|
+| `sda1` | NTFS | ~1.4 TB | `/mnt/orion-media` | **read-only** | Jellyfin media library |
+| `sda2` | ext4 | ~48 GB | `/mnt/orion-data` | read-write | Docker data root, Jellyfin config & cache |
+
+**fstab entries:**
+```fstab
+# NTFS media — read-only
+UUID=8A28D0A828D09493  /mnt/orion-media  ntfs3  ro,noatime,nofail,x-systemd.device-timeout=10  0  0
+
+# ext4 data — Docker + Jellyfin
+UUID=86ef87e2-b8c4-4ef7-bad2-b52c2e459cdc  /mnt/orion-data  ext4  defaults,noatime,nofail  0  2
+```
+
+**Directory layout on `/mnt/orion-data`:**
+```
+/mnt/orion-data/
+├── docker/            ← Docker data root (daemon.json: data-root)
+└── jellyfin/
+    ├── config/        ← Jellyfin config, DB, network.xml
+    └── cache/         ← Transcoded thumbnails
+```
+
+> [!WARNING]
+> Docker **cannot start** if `/mnt/orion-data` is not mounted. The `nofail` fstab flag prevents a boot hang, but start Docker manually (`sudo systemctl start docker && docker start jellyfin`) if the HDD was absent during boot.
 
 ---
 
@@ -188,6 +243,7 @@ To ensure high portability, core system configurations are stored in the reposit
 *   **Systemd**: `system_configs/systemd/orion-webapp.service` → `/etc/systemd/system/`
 *   **Nginx**: `system_configs/nginx/orion-webdav` → `/etc/nginx/sites-available/`
 *   **Cron**: `system_configs/cron/crontab.txt` (Template source for `crontab -e`)
+*   **Docker Compose**: `/opt/orion-docker/jellyfin/docker-compose.yml` (manually managed, not in repo)
 
 ### 8.2 System Only (External)
 The following items **cannot** be in the repository for security or technical reasons:
@@ -196,3 +252,5 @@ The following items **cannot** be in the repository for security or technical re
 *   **Tailscale**: Proprietary state managed by the Tailscale daemon.
 *   **Database**: `services/pi-monitor/db/pi-monitor.db` (Git-ignored live data).
 *   **MQTT Broker**: Mosquitto config at `/etc/mosquitto/` (system-managed).
+*   **Docker daemon config**: `/etc/docker/daemon.json` (system-managed, `data-root` set to `/mnt/orion-data/docker`).
+*   **Jellyfin config**: `/mnt/orion-data/jellyfin/config/` (on HDD, not in repo).
