@@ -92,8 +92,18 @@ while read -r line; do
     DISK_LOG+=" | $SLUG:$PERCENT%"
 done < <(df -h | grep '^/dev/')
 
+# --- Network ---
+PING_RESULT=$(ping -c 3 -W 2 1.1.1.1 2>/dev/null)
+NET_PING=$(echo "$PING_RESULT" | awk -F'/' '/rtt/ {printf "%.1f", $5}')
+NET_PING=${NET_PING:-0}
+NET_LOSS=$(echo "$PING_RESULT" | awk '/packet loss/ {print int($6)}')
+NET_LOSS=${NET_LOSS:-100}
+LAN_RESULT=$(ping -c 3 -W 1 192.168.0.1 2>/dev/null)
+NET_LAN=$(echo "$LAN_RESULT" | awk -F'/' '/rtt/ {printf "%.1f", $5}')
+NET_LAN=${NET_LAN:-0}
+
 # --- Log ---
-echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD | CpuUtil:$CPU_UTIL% | Room:${ROOM_TEMP}C/${ROOM_HUM}%$DISK_LOG" >> "$LOG_PATH"
+echo "$TS | CPU:$CPU_TEMP | Board:$BOARD_TEMP | Fan:$FAN_RPM ($FAN_PWM) | Freq:$FREQ | RAM:$RAM_USED | Load:$LOAD | CpuUtil:$CPU_UTIL% | Room:${ROOM_TEMP}C/${ROOM_HUM}% | Net:${NET_PING}ms loss:${NET_LOSS}% LAN:${NET_LAN}ms$DISK_LOG" >> "$LOG_PATH"
 
 # --- DB entry ---
 sqlite3 "$DB_PATH" <<EOF
@@ -105,5 +115,8 @@ INSERT INTO metrics (ts, source, name, value, unit) VALUES
 ('$TS','$SOURCE', 'cpu_freq', '${FREQ% MHz}', 'MHz'),
 ('$TS','$SOURCE', 'ram_used', '$RAM_USED', 'MB'),
 ('$TS','$SOURCE', 'load_1m', '$LOAD_1M', 'load'),
-('$TS','$SOURCE', 'cpu_util_index', '$CPU_UTIL', '%')$ROOM_SQL$DISK_SQL;
+('$TS','$SOURCE', 'cpu_util_index', '$CPU_UTIL', '%'),
+('$TS','$SOURCE', 'net_ping_ms', '$NET_PING', 'ms'),
+('$TS','$SOURCE', 'net_packet_loss', '$NET_LOSS', '%'),
+('$TS','$SOURCE', 'net_lan_ms', '$NET_LAN', 'ms')$ROOM_SQL$DISK_SQL;
 EOF

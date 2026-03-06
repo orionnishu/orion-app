@@ -28,6 +28,7 @@
         <nav>
             <a href="{{ root }}/" class="{{ 'active' if path == root ~ '/' or path == root else '' }}">Home</a>
             <a href="{{ root }}/dashboard" class="{{ 'active' if '/dashboard' in path else '' }}">Dashboard</a>
+            <a href="{{ root }}/network" class="{{ 'active' if '/network' in path else '' }}">Network</a>
             <a href="{{ root }}/media" class="{{ 'active' if '/media' in path else '' }}">Media</a>
             <a href="{{ root }}/admin" class="{{ 'active' if '/admin' in path else '' }}">Admin</a>
         </nav>
