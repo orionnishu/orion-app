@@ -44,3 +44,7 @@ tmp/
 *.mp4
 *.crt
 *.key
+# PlatformIO
+esp32/.pio/
+esp32/.vscode/
+
