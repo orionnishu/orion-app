@@ -6,6 +6,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import subprocess
 import secrets
 import sqlite3
+import socket
+import json
 import time
 import os
 from pathlib import Path
@@ -46,16 +48,28 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # --------------------
 # PC config
 # --------------------
-PC_IP = "192.168.50.2"
+PC_IP = "192.168.0.102"
 SCRIPTS_DIR = Path("/home/orion/server/scripts")
 
+_pc_last_check = 0.0
+_pc_last_result = False
+_PC_CACHE_TTL = 2.0
+
 def is_pc_online() -> bool:
-    result = subprocess.run(
-        ["ping", "-c", "1", "-W", "1", PC_IP],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    return result.returncode == 0
+    global _pc_last_check, _pc_last_result
+
+    now = time.time()
+    if now - _pc_last_check < _PC_CACHE_TTL:
+        return _pc_last_result
+
+    _pc_last_check = now
+    try:
+        with socket.create_connection((PC_IP, 445), timeout=0.4):
+            _pc_last_result = True
+    except OSError:
+        _pc_last_result = False
+
+    return _pc_last_result
 
 @app.get("/api/pc-status", response_class=JSONResponse)
 def pc_status():
@@ -76,7 +90,7 @@ def home(request: Request, user: str = Depends(authenticate)):
 def dashboard(request: Request, user: str = Depends(authenticate)):
     return templates.TemplateResponse(
         "dashboard.html",
-        {"request": request, "title": "Dashboard"}
+        {"request": request, "title": "Pi Health"}
     )
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -222,38 +236,62 @@ DB_PATH = "/home/orion/server/services/pi-monitor/db/pi-monitor.db"
 
 WINDOW_MAP = {
     "1h": "-1 hours",
-    "2h": "-2 hours",
     "6h": "-6 hours",
     "24h": "-24 hours",
     "7d": "-7 days",
 }
 
 def _metric_series(metric_name: str, window: str):
-    if window not in WINDOW_MAP:
-        window = "24h"
-
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    cur.execute(f"""
-        SELECT ts, value
-        FROM metrics
-        WHERE name = ?
-          AND ts >= datetime('now', '{WINDOW_MAP[window]}', 'localtime')
-        ORDER BY ts
-    """, (metric_name,))
+    if window == "weekly":
+        # Query weekly archives
+        cur.execute(f"""
+            SELECT week_start, avg_value
+            FROM metrics_weekly_avg
+            WHERE name = ?
+            ORDER BY week_start
+        """, (metric_name,))
+    else:
+        # Query raw metrics
+        if window not in WINDOW_MAP:
+            window = "24h"
+            
+        cur.execute(f"""
+            SELECT ts, value
+            FROM metrics
+            WHERE name = ?
+              AND ts >= datetime('now', '{WINDOW_MAP[window]}', 'localtime')
+            ORDER BY ts
+        """, (metric_name,))
 
     rows = cur.fetchall()
     conn.close()
 
+    labels = []
+    values = []
+    for r in rows:
+        try:
+            if r[1] is not None and str(r[1]).strip() != "":
+                val = float(r[1])
+                labels.append(r[0])
+                values.append(val)
+        except ValueError:
+            pass
+
     return {
-        "labels": [r[0] for r in rows],
-        "values": [float(r[1]) for r in rows],
+        "labels": labels,
+        "values": values,
     }
 
 @app.get("/api/metrics/cpu-temp", response_class=JSONResponse)
 def cpu_temp_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("cpu_temp", window)
+
+@app.get("/api/metrics/cpu-utilization", response_class=JSONResponse)
+def cpu_util_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("cpu_util_index", window)
 
 @app.get("/api/metrics/ram-used", response_class=JSONResponse)
 def ram_used_series(window: str = "24h", user: str = Depends(authenticate)):
@@ -266,6 +304,82 @@ def load_1m_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/fan-rpm", response_class=JSONResponse)
 def fan_rpm_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("fan_rpm", window)
+
+@app.get("/api/metrics/cpu-freq", response_class=JSONResponse)
+def cpu_freq_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("cpu_freq", window)
+
+# --- Service Monitoring ---
+MONITORED_SERVICES = [
+    "nginx",
+    "orion-webapp",
+    "ssh",
+    "tailscaled",
+    "wpa_supplicant",
+    "cron",
+    "bluetooth",
+    "avahi-daemon",
+    "mosquitto"
+]
+
+@app.get("/api/services/status", response_class=JSONResponse)
+def get_service_status(user: str = Depends(authenticate)):
+    results = []
+    for service in MONITORED_SERVICES:
+        try:
+            # Check if active
+            res = subprocess.run(
+                ["systemctl", "is-active", service],
+                capture_output=True,
+                text=True
+            )
+            status = res.stdout.strip()
+            # Also get sub-state if needed, but is-active returns 'active' or 'inactive'/'failed'
+            processed_status = "running" if status == "active" else "stopped"
+            
+            # Map nice names
+            nice_name = service.replace(".service", "").replace("-", " ").title()
+            if service == "ssh": nice_name = "SSH"
+            if service == "nginx": nice_name = "NGINX (WebDAV)"
+            if service == "tailscaled": nice_name = "Tailscale"
+            if service == "cron": nice_name = "Cron Jobs"
+            if service == "avahi-daemon": nice_name = "mDNS (Avahi)"
+            if service == "orion-webapp": nice_name = "Uvicorn (FastAPI)"
+            if service == "wpa_supplicant": nice_name = "Wi-Fi"
+            if service == "mosquitto": nice_name = "Mosquitto (MQTT)"
+
+            results.append({
+                "id": service,
+                "name": nice_name,
+                "status": processed_status, # 'running', 'stopped'
+                "raw": status
+            })
+        except Exception as e:
+            results.append({"id": service, "name": service, "status": "error", "error": str(e)})
+
+    # --- ESP32 device status via MQTT retained message ---
+    try:
+        esp32_result = subprocess.run(
+            ["mosquitto_sub", "-h", "192.168.0.103", "-t", "orion/pc/status", "-C", "1", "-W", "2"],
+            capture_output=True, text=True, timeout=5
+        )
+        esp32_status = esp32_result.stdout.strip()
+        results.append({
+            "id": "esp32-master-bedroom",
+            "name": "ESP32 Master Bedroom",
+            "status": "running" if esp32_status == "esp32_online" else "stopped",
+            "raw": esp32_status or "unreachable"
+        })
+    except Exception:
+        results.append({
+            "id": "esp32-master-bedroom",
+            "name": "ESP32 Master Bedroom",
+            "status": "stopped",
+            "raw": "unreachable"
+        })
+
+    return results
+
 @app.get("/api/metrics/disk-usage", response_class=JSONResponse)
 def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("disk_usage", window)
@@ -273,7 +387,6 @@ def disk_usage_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/storage/status", response_class=JSONResponse)
 def storage_status(user: str = Depends(authenticate)):
     """Get real-time storage status for all physical disks"""
-    import subprocess
     try:
         result = subprocess.run(["df", "-h"], capture_output=True, text=True)
         lines = result.stdout.strip().split('\n')[1:]
@@ -294,3 +407,51 @@ def storage_status(user: str = Depends(authenticate)):
         return disks
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/api/metrics/room-temp", response_class=JSONResponse)
+def room_temp_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("room_temp", window)
+
+@app.get("/api/metrics/room-humidity", response_class=JSONResponse)
+def room_humidity_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("room_humidity", window)
+
+@app.get("/api/sensors/dht11", response_class=JSONResponse)
+def dht11_live(user: str = Depends(authenticate)):
+    """Live read from DHT11 sensor via ESP32 MQTT (retained telemetry)"""
+    try:
+        result = subprocess.run(
+            ["mosquitto_sub", "-h", "192.168.0.103", "-t", "orion/esp32/telemetry/dht", "-C", "1", "-W", "3"],
+            capture_output=True, text=True, timeout=5
+        )
+        data = json.loads(result.stdout.strip())
+        return {"temperature": data.get("temp"), "humidity": data.get("hum")}
+    except Exception as e:
+        return {"temperature": None, "humidity": None, "error": str(e)}
+
+    # --- [COMMENTED OUT] Original GPIO reading (DHT11 on Pi GPIO 27) ---
+    # Restore this block if sensor is moved back to the Pi.
+    # try:
+    #     result = subprocess.run(
+    #         ["/home/orion/server/venv/bin/python3", "-u", "-c",
+    #          "import board,adafruit_dht,time\n"
+    #          "d=adafruit_dht.DHT11(board.D27,use_pulseio=False)\n"
+    #          "for _ in range(5):\n"
+    #          " try:\n"
+    #          "  t,h=d.temperature,d.humidity\n"
+    #          "  if t is not None and h is not None:\n"
+    #          "   print(f'{t},{h}')\n"
+    #          "   break\n"
+    #          " except: pass\n"
+    #          " time.sleep(2)\n"
+    #          "d.exit()"],
+    #         capture_output=True, text=True, timeout=15
+    #     )
+    #     output = result.stdout.strip()
+    #     if output and ',' in output:
+    #         temp, hum = output.split(',')
+    #         return {"temperature": float(temp), "humidity": float(hum)}
+    #     return {"temperature": None, "humidity": None, "error": "Sensor returned no data"}
+    # except Exception as e:
+    #     return {"temperature": None, "humidity": None, "error": str(e)}
+

@@ -11,16 +11,23 @@
     <div class="dashboard-controls">
       <select id="timeWindow">
         <option value="1h">Last 1 hour</option>
-        <option value="2h">Last 2 hours</option>
+
         <option value="6h">Last 6 hours</option>
         <option value="24h" selected>Last 24 hours</option>
         <option value="7d">Last 7 days</option>
+        <option value="weekly">Historical (Weekly)</option>
       </select>
     </div>
   </header>
 
   <!-- Quick Glance Section -->
   <section class="stats-overview">
+    <div class="stat-card">
+      <span class="stat-label">CPU Utilization</span>
+      <div>
+        <span class="stat-value" id="val-cpu-util">--</span>
+      </div>
+    </div>
     <div class="stat-card">
       <span class="stat-label">CPU Temp</span>
       <div>
@@ -32,13 +39,6 @@
       <span class="stat-label">RAM Usage</span>
       <div>
         <span class="stat-value" id="val-ram-used">--</span>
-        <span class="stat-unit">MB</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Load Avg (1m)</span>
-      <div>
-        <span class="stat-value" id="val-load-1m">--</span>
       </div>
     </div>
     <div class="stat-card">
@@ -48,10 +48,31 @@
         <span class="stat-unit">RPM</span>
       </div>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">Room Temp</span>
+      <div>
+        <span class="stat-value" id="val-room-temp">--</span>
+        <span class="stat-unit">°C</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Humidity</span>
+      <div>
+        <span class="stat-value" id="val-room-humidity">--</span>
+        <span class="stat-unit">%</span>
+      </div>
+    </div>
   </section>
 
   <!-- Main Charts Section -->
   <div class="charts-grid">
+    <div class="chart-card">
+      <h3>🧠 CPU Utilization Index</h3>
+      <div class="chart-container">
+        <canvas id="cpuUtilChart"></canvas>
+      </div>
+    </div>
+
     <div class="chart-card">
       <h3>🌡️ CPU Temperature</h3>
       <div class="chart-container">
@@ -67,16 +88,23 @@
     </div>
 
     <div class="chart-card">
-      <h3>⚖️ Load Average</h3>
+      <h3>🌀 Fan Performance</h3>
       <div class="chart-container">
-        <canvas id="loadChart"></canvas>
+        <canvas id="fanChart"></canvas>
       </div>
     </div>
 
     <div class="chart-card">
-      <h3>🌀 Fan Performance</h3>
+      <h3>🏠 Room Temperature</h3>
       <div class="chart-container">
-        <canvas id="fanChart"></canvas>
+        <canvas id="roomTempChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>💧 Room Humidity</h3>
+      <div class="chart-container">
+        <canvas id="roomHumidityChart"></canvas>
       </div>
     </div>
   </div>
@@ -93,5 +121,5 @@
 
 <script>window.BASE_PATH = '{{ base }}';</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{{ base }}/static/dashboard.js"></script>
+<script src="{{ base }}/static/dashboard.js?v=8"></script>
 {% endblock %}
