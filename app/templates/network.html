@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set base = request.scope.get('root_path', '') %}
+<div class="dashboard-container">
+    <header class="dashboard-header">
+        <div>
+            <h2>Network Dashboard</h2>
+            <div class="last-updated" id="last-updated">Initial load...</div>
+        </div>
+        <div class="dashboard-controls">
+            <select id="timeWindow">
+                <option value="1h">Last 1 hour</option>
+                <option value="6h">Last 6 hours</option>
+                <option value="24h" selected>Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+                <option value="weekly">Historical (Weekly)</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Quick Glance Section -->
+    <section class="stats-overview">
+        <div class="stat-card">
+            <span class="stat-label">Internet Ping</span>
+            <div>
+                <span class="stat-value" id="val-net-ping">--</span>
+                <span class="stat-unit">ms</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Packet Loss</span>
+            <div>
+                <span class="stat-value" id="val-net-loss">--</span>
+                <span class="stat-unit">%</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">LAN Latency</span>
+            <div>
+                <span class="stat-value" id="val-net-lan">--</span>
+                <span class="stat-unit">ms</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Charts Section -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>🌐 Internet Latency (1.1.1.1)</h3>
+            <div class="chart-container">
+                <canvas id="netPingChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>⚠️ Packet Loss</h3>
+            <div class="chart-container">
+                <canvas id="netLossChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>🏠 LAN Latency (Router)</h3>
+            <div class="chart-container">
+                <canvas id="netLanChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>window.BASE_PATH = '{{ base }}';</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ base }}/static/network.js?v=1"></script>
+{% endblock %}

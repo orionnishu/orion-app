@@ -93,6 +93,13 @@ def dashboard(request: Request, user: str = Depends(authenticate)):
         {"request": request, "title": "Pi Health"}
     )
 
+@app.get("/network", response_class=HTMLResponse)
+def network(request: Request, user: str = Depends(authenticate)):
+    return templates.TemplateResponse(
+        "network.html",
+        {"request": request, "title": "Network Dashboard"}
+    )
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin(request: Request, user: str = Depends(authenticate)):
     return templates.TemplateResponse(
@@ -378,6 +385,47 @@ def get_service_status(user: str = Depends(authenticate)):
             "raw": "unreachable"
         })
 
+    # --- Docker Engine status ---
+    try:
+        docker_res = subprocess.run(
+            ["systemctl", "is-active", "docker"],
+            capture_output=True, text=True
+        )
+        docker_active = docker_res.stdout.strip() == "active"
+        results.append({
+            "id": "docker",
+            "name": "Docker Engine",
+            "status": "running" if docker_active else "stopped",
+            "raw": docker_res.stdout.strip()
+        })
+    except Exception as e:
+        results.append({"id": "docker", "name": "Docker Engine", "status": "error", "error": str(e)})
+
+    # --- Jellyfin container status ---
+    try:
+        jf_res = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}} {{.State.Health.Status}}", "jellyfin"],
+            capture_output=True, text=True, timeout=3
+        )
+        jf_out = jf_res.stdout.strip()  # e.g. "running healthy"
+        jf_parts = jf_out.split()
+        jf_running = len(jf_parts) > 0 and jf_parts[0] == "running"
+        jf_healthy = len(jf_parts) > 1 and jf_parts[1] == "healthy"
+        if jf_running and jf_healthy:
+            jf_status = "running"
+        elif jf_running:
+            jf_status = "running"  # starting / no healthcheck
+        else:
+            jf_status = "stopped"
+        results.append({
+            "id": "jellyfin",
+            "name": "Jellyfin",
+            "status": jf_status,
+            "raw": jf_out or "not found"
+        })
+    except Exception as e:
+        results.append({"id": "jellyfin", "name": "Jellyfin", "status": "stopped", "raw": "error"})
+
     return results
 
 @app.get("/api/metrics/disk-usage", response_class=JSONResponse)
@@ -415,6 +463,18 @@ def room_temp_series(window: str = "24h", user: str = Depends(authenticate)):
 @app.get("/api/metrics/room-humidity", response_class=JSONResponse)
 def room_humidity_series(window: str = "24h", user: str = Depends(authenticate)):
     return _metric_series("room_humidity", window)
+
+@app.get("/api/metrics/net-ping", response_class=JSONResponse)
+def net_ping_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("net_ping_ms", window)
+
+@app.get("/api/metrics/net-loss", response_class=JSONResponse)
+def net_loss_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("net_packet_loss", window)
+
+@app.get("/api/metrics/net-lan", response_class=JSONResponse)
+def net_lan_series(window: str = "24h", user: str = Depends(authenticate)):
+    return _metric_series("net_lan_ms", window)
 
 @app.get("/api/sensors/dht11", response_class=JSONResponse)
 def dht11_live(user: str = Depends(authenticate)):
