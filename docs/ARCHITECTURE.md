@@ -35,14 +35,14 @@ graph TB
     end
 
     TS <--> Tailscale
-    Tailscale -->"|/"| Nginx
-    Tailscale -->"|/app"| FastAPI
-    Nginx -->"|/jellyfin"| Jellyfin
-    FastAPI -->"|mosquitto_sub/pub"| Mosquitto
+    Tailscale -->|"/"| Nginx
+    Tailscale -->|"/app"| FastAPI
+    Nginx -->|"/jellyfin"| Jellyfin
+    FastAPI -->|"mosquitto_sub/pub"| Mosquitto
     Mosquitto <-->|"orion/pc/cmd<br/>orion/pc/status"| ESP32
-    ESP32 -->"|GPIO4 pulse"| PC
-    FastAPI -->"|Port 445 check"| PC
-    PiMon -->"|metrics"| FastAPI
+    ESP32 -->|"GPIO4 pulse"| PC
+    FastAPI -->|"Port 445 check"| PC
+    PiMon -->|"metrics"| FastAPI
     Jellyfin --- HDD1
     HDD2 --- Jellyfin
 ```
