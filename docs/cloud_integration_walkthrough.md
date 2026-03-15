@@ -107,3 +107,25 @@ The Oracle `oci` CLI is installed and configured on the Raspberry Pi with two pr
 - API signing keys were generated and uploaded.
 - `machines.conf` was populated with the exact Instance OCIDs (`orion-cloud1-vm1`, `orion-cloud2-vm1`, `orion-cloud2-vm2`).
 - The `orion-node start` and `orion-node stop` commands successfully execute `oci compute instance action` to dynamically spin up and tear down workers to save free-tier resources.
+
+---
+
+## Phase 3: Job Scheduler (Pi)
+
+The control plane orchestrates jobs by leveraging Redis queues and the OCI CLI.
+
+### Job Submission & Tracking
+Extended the `main.py` FastAPI application to include endpoints for job scheduling:
+- `POST /admin/api/job/submit`: Accepts shell/docker commands, generates a unique `job_id`, and pushes the payload directly to a Redis list (`orion:queue:<size>`).
+- `GET /admin/api/job/{job_id}/status`: Provides real-time execution state (Pending, Running, or Completed with exit codes and stdout) by checking worker heartbeats and Redis result caches.
+- `GET /admin/api/jobs/cluster-state`: Displays the overarching system state, length of all standard queues, and the individual statuses of all active VM workers.
+
+### Auto-Scaling Scheduler
+Created `scripts/orion-scheduler.py` (deployed as `orion-scheduler.service` on the Pi):
+- **Queue Polling:** The scheduler polls the Redis worker queues (`medium`, `large`) every 10 seconds.
+- **Dynamic Spin-Up:** When a queue has jobs but no active workers are registered, it automatically triggers `orion-node start <vm>` to cold-boot the corresponding Oracle VM.
+- **Cooldowns:** Implements a 5-minute cooldown to prevent spamming the OCI API while the VM is booting.
+- **Worker Auto-Shutdown:** As configured in Phase 2, workers shut themselves down by calling the Pi's API after 10 minutes of idleness.
+
+### Admin Dashboard UI
+Added a "Jobs" tab to the `/admin` web console. It polls the cluster state API every 5 seconds to provide a live view of the queues and active VMs, and includes a UI form to submit arbitrary jobs for testing and administration.
