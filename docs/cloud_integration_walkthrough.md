@@ -127,5 +127,6 @@ Created `scripts/orion-scheduler.py` (deployed as `orion-scheduler.service` on t
 - **Cooldowns:** Implements a 5-minute cooldown to prevent spamming the OCI API while the VM is booting.
 - **Worker Auto-Shutdown:** As configured in Phase 2, workers shut themselves down by calling the Pi's API after 10 minutes of idleness.
 
-### Admin Dashboard UI
-Added a "Jobs" tab to the `/admin` web console. It polls the cluster state API every 5 seconds to provide a live view of the queues and active VMs, and includes a UI form to submit arbitrary jobs for testing and administration.
+### Admin Dashboard UI & Handbook
+- **Admin Handbook:** Created `docs/ADMIN_HANDBOOK.md` detailing all administrative operations, CLI commands, and VM management. This is served directly from the FastAPI `/docs_static` endpoint.
+- **Unified Jobs & System Tab:** Consolidated the "System" and "Jobs" sections in the `/admin` web console into a unified view. It polls the cluster state API every 5 seconds to provide a live view of the queues and active VMs, provides quick-action buttons (Deploy, Pi Sync, Sleep PC), includes a link to the Administrator Handbook, and has a UI form to submit arbitrary jobs for testing and administration.
