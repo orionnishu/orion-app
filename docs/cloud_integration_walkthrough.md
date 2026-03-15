@@ -96,5 +96,14 @@ Created and deployed the `/home/orion/server/scripts/orion-worker.py` Python age
 
 Node Exporter was also natively installed on both worker VMs for resource tracking.
 
-### Action Required for OCI Start/Stop:
-The Oracle `oci` CLI is currently finishing installation on the Pi. Once done, it needs valid Oracle Cloud Tenancy profiles configured (`cloud1` and `cloud2`) so the script can orchestrate the starting of the worker VMs.
+### Git-Based Automated Deployment
+To ensure configurations stay synchronized, the worker agents are deployed directly from the cloned Git repository (`~/server`) on the worker VMs.
+- `deploy-worker.sh` automates cloning/updating the repository over SSH.
+- The `orion-worker.service` systemd file is symlinked directly from the repository into `/etc/systemd/system/`.
+- The `orion-worker.py` script executes directly from the cloned repository.
+
+### OCI CLI Integration (Completed)
+The Oracle `oci` CLI is installed and configured on the Raspberry Pi with two profiles (`cloud1` and `cloud2`) to control the lifecycle of the worker VMs across both tenancies.
+- API signing keys were generated and uploaded.
+- `machines.conf` was populated with the exact Instance OCIDs (`orion-cloud1-vm1`, `orion-cloud2-vm1`, `orion-cloud2-vm2`).
+- The `orion-node start` and `orion-node stop` commands successfully execute `oci compute instance action` to dynamically spin up and tear down workers to save free-tier resources.
