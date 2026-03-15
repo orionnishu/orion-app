@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy the worker agent to a specific worker VM
+# Deploy or update the worker agent to a specific worker VM
 # Usage: ./deploy-worker.sh <worker-hostname>
 
 WORKER=$1
@@ -8,22 +8,37 @@ if [ -z "$WORKER" ]; then
   exit 1
 fi
 
-echo "Deploying Orion Worker Agent to $WORKER..."
+echo "Deploying Orion Worker Agent to $WORKER via Git..."
 
-# Transfer files
-scp -o ProxyCommand="tailscale nc %h %p" ../../scripts/orion-worker.py ubuntu@$WORKER:/tmp/
-scp -o ProxyCommand="tailscale nc %h %p" ../../scripts/orion-worker.service ubuntu@$WORKER:/tmp/
-
-# Run setup commands securely over SSH
-ssh -o ProxyCommand="tailscale nc %h %p" ubuntu@$WORKER << 'EOF'
-  sudo mv /tmp/orion-worker.py /usr/local/bin/
-  sudo chmod +x /usr/local/bin/orion-worker.py
-  sudo mv /tmp/orion-worker.service /etc/systemd/system/
+ssh -o ConnectTimeout=10 -o BatchMode=yes ubuntu@$WORKER << 'EOF'
+  set -e
   
+  # 1. Update repository
+  echo "Updating repository..."
+  if [ ! -d ~/server ]; then
+    git clone https://github.com/orionnishu/orion-app.git ~/server
+  fi
+  cd ~/server
+  git fetch origin
+  git checkout cloud_integration
+  git pull origin cloud_integration
+  
+  # 2. Install dependencies
+  echo "Installing dependencies..."
   sudo apt-get update
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3-redis prometheus-node-exporter
   
+  # 3. Symlink systemd service (if not already done)
+  echo "Configuring service..."
+  if [ ! -f /etc/systemd/system/orion-worker.service ]; then
+    sudo ln -s /home/ubuntu/server/scripts/orion-worker.service /etc/systemd/system/orion-worker.service
+  fi
+  
+  # 4. Reload and restart
   sudo systemctl daemon-reload
   sudo systemctl enable --now orion-worker
-  echo "Deployment successful!"
+  sudo systemctl restart orion-worker
+  
+  echo "Deployment successful! Status:"
+  systemctl status orion-worker --no-pager | grep Active
 EOF
