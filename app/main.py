@@ -46,6 +46,7 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
 # --------------------
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/docs_static", StaticFiles(directory="docs"), name="docs_static")
 
 # --------------------
 # PC config

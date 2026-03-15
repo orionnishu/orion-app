@@ -6,32 +6,61 @@
 
   <!-- Tab Navigation -->
   <nav class="admin-tabs">
-    <button class="tab-btn active" onclick="showTab('system')">System</button>
+    <button class="tab-btn active" onclick="showTab('system')">System & Jobs</button>
     <button class="tab-btn" onclick="showTab('users')">Users</button>
     <button class="tab-btn" onclick="showTab('logs')">Logs</button>
   </nav>
 
-  <!-- System Tab -->
+  <!-- System & Jobs Tab -->
   <section id="tab-system" class="tab-content active">
-    <div class="card">
-      <h3>PC Control</h3>
-      <div class="status-row">
-        <span>Status:</span>
-        <strong id="pc-status">Checking...</strong>
+    <!-- Quick Actions -->
+    <div style="display: flex; gap: 20px;">
+      <div class="card" style="flex: 1;">
+        <h3>PC Control</h3>
+        <div class="status-row">
+          <span>Status:</span>
+          <strong id="pc-status">Checking...</strong>
+        </div>
+        <div class="action-row" id="pc-actions"></div>
       </div>
-      <div class="action-row" id="pc-actions"></div>
+
+      <div class="card" style="flex: 1;">
+        <h3>Server Actions</h3>
+        <div class="action-row">
+          <button class="btn" onclick="runAction('deploy')">
+            <span class="icon">🚀</span> Deploy Workers
+          </button>
+          <button class="btn" onclick="runAction('pisync')">
+            <span class="icon">📁</span> Pi Sync
+          </button>
+          <a href="/docs_static/ADMIN_HANDBOOK.md" target="_blank" class="btn btn-primary"
+            style="text-decoration: none;">
+            <span class="icon">📖</span> View Handbook
+          </a>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
-      <h3>Server Actions</h3>
-      <div class="action-row">
-        <button class="btn" onclick="runAction('deploy')">
-          <span class="icon">🚀</span> Deploy
-        </button>
-        <button class="btn" onclick="runAction('pisync')">
-          <span class="icon">📁</span> Pi Sync
-        </button>
-      </div>
+    <!-- Cluster State -->
+    <div class="card" style="margin-top: 20px;">
+      <h3>Cluster State</h3>
+      <div id="cluster-state-content">Loading cluster state...</div>
+    </div>
+
+    <!-- Submit Custom Job -->
+    <div class="card" style="margin-top: 20px;">
+      <h3>Submit Custom Job</h3>
+      <form id="submit-job-form" class="inline-form" onsubmit="submitJob(event)">
+        <input type="text" id="job-command" name="command" placeholder="Command (e.g. echo hello)" required
+          style="flex: 2;">
+        <select name="queue" id="job-queue">
+          <option value="orion:queue:default">default</option>
+          <option value="orion:queue:medium" selected>medium (cloud2-vm1)</option>
+          <option value="orion:queue:large">large (cloud1-vm1)</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Dispatch</button>
+        <span id="job-submit-status"></span>
+      </form>
     </div>
   </section>
 
@@ -97,6 +126,7 @@
 
     if (tabName === 'users') loadUsers();
     if (tabName === 'logs') refreshLogs();
+    if (tabName === 'system') refreshClusterState();
   }
 
   // PC Status
@@ -230,6 +260,80 @@
     closeDeleteModal();
   }
 
+  // Cluster State
+  async function refreshClusterState() {
+    if (!document.getElementById('tab-system').classList.contains('active')) return;
+
+    try {
+      const res = await fetch(BASE_PATH + '/admin/api/jobs/cluster-state');
+      const data = await res.json();
+      const container = document.getElementById('cluster-state-content');
+
+      let html = `<div style="display: flex; gap: 20px; margin-bottom: 20px;">`;
+
+      // Queues
+      html += `<div style="flex: 1;"><h4>Queues</h4><ul>`;
+      for (const [q, count] of Object.entries(data.queues)) {
+        html += `<li><strong>${q}</strong>: ${count} pending</li>`;
+      }
+      html += `</ul></div>`;
+
+      // Active Workers
+      html += `<div style="flex: 1;"><h4>Active Workers</h4>`;
+      if (Object.keys(data.active_workers).length === 0) {
+        html += `<p class="status-offline">No workers currently alive.</p>`;
+      } else {
+        html += `<ul>`;
+        for (const [w, info] of Object.entries(data.active_workers)) {
+          const statusClass = info.status === 'idle' ? 'status-success' : 'status-pending';
+          const jobText = info.current_job ? ` (Job: ${info.current_job})` : '';
+          html += `<li><strong>${w}</strong>: <span class="${statusClass}">${info.status}</span>${jobText}<br>
+                   <small>Idle for ${info.idle_time}s | Queue: ${info.queue}</small></li>`;
+        }
+        html += `</ul>`;
+      }
+      html += `</div></div>`;
+
+      container.innerHTML = html;
+    } catch (e) {
+      document.getElementById('cluster-state-content').innerHTML = '<div class="error">Failed to load cluster state</div>';
+    }
+  }
+
+  // Submit Job
+  async function submitJob(event) {
+    event.preventDefault();
+    const statusEl = document.getElementById('job-submit-status');
+    const form = document.getElementById('submit-job-form');
+    const formData = new FormData(form);
+
+    statusEl.textContent = 'Submitting...';
+    statusEl.className = 'status-pending';
+
+    try {
+      const res = await fetch(BASE_PATH + '/admin/api/job/submit', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        statusEl.textContent = `✓ Dispatched (${data.job_id})`;
+        statusEl.className = 'status-success';
+        form.reset();
+        refreshClusterState();
+      } else {
+        statusEl.textContent = data.detail || 'Failed';
+        statusEl.className = 'status-error';
+      }
+    } catch (e) {
+      statusEl.textContent = 'Failed';
+      statusEl.className = 'status-error';
+    }
+
+    setTimeout(() => { statusEl.textContent = ''; }, 5000);
+  }
+
   // Logs
   async function refreshLogs() {
     try {
@@ -246,6 +350,7 @@
   // Init
   refreshStatus();
   setInterval(refreshStatus, 10000);
+  setInterval(refreshClusterState, 5000);
 </script>
 
 {% endblock %}
