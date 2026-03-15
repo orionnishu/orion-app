@@ -12,6 +12,8 @@ import time
 import os
 from pathlib import Path
 from collections import deque
+import uuid
+import redis
 
 # Support for being served under a subpath (e.g., /app via Tailscale)
 ROOT_PATH = os.environ.get("ROOT_PATH", "")
@@ -223,6 +225,50 @@ def api_webdav_provision(
         env=env
     )
     return {"status": "ok", "action": "webdav-provision", "username": username}
+
+# ------------------------------------------------------------------
+# Distributed Job Queue (Redis)
+# ------------------------------------------------------------------
+
+REDIS_HOST = "100.117.244.106"
+REDIS_PORT = 6379
+
+def get_redis_client():
+    return redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+
+@app.post("/admin/api/job/submit", response_class=JSONResponse)
+def api_job_submit(
+    command: str = Form(...),
+    queue: str = Form("orion:queue:medium"),
+    user: str = Depends(authenticate)
+):
+    """Submit a shell or docker command to a specific worker queue"""
+    if not command.strip():
+        raise HTTPException(status_code=400, detail="Command cannot be empty")
+        
+    try:
+        r = get_redis_client()
+        job_id = f"job-{uuid.uuid4().hex[:8]}"
+        
+        job_data = {
+            "id": job_id,
+            "command": command,
+            "submitted_at": time.time(),
+            "submitted_by": user,
+            "queue": queue
+        }
+        
+        # Push to the Right side of the queue (worker blpop takes from left)
+        r.rpush(queue, json.dumps(job_data))
+        
+        return {
+            "status": "ok",
+            "job_id": job_id,
+            "queue": queue,
+            "message": "Job submitted successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit job: {str(e)}")
 
 # ------------------------------------------------------------------
 # WebDAV User Management
