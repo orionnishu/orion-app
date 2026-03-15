@@ -33,8 +33,8 @@
           <button class="btn" onclick="runAction('pisync')">
             <span class="icon">📁</span> Pi Sync
           </button>
-          <a href="/docs_static/ADMIN_HANDBOOK.md" target="_blank" class="btn btn-primary"
-            style="text-decoration: none;">
+          <a href="{{ request.scope.get(" root_path", "" ) }}/docs_static/ADMIN_HANDBOOK.md" target="_blank"
+            class="btn btn-primary" style="text-decoration: none;">
             <span class="icon">📖</span> View Handbook
           </a>
         </div>
