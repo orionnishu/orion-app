@@ -1,0 +1,394 @@
+#!/usr/bin/env bash
+# ============================================================================
+# orion-node — Unified machine lifecycle manager for the ORION cluster
+#
+# Usage:
+#   orion-node start  <node>     Start/wake a machine
+#   orion-node stop   <node>     Stop/sleep a machine
+#   orion-node status <node>     Check reachability (tailscale ping)
+#   orion-node list              Show all registered nodes + live status
+#
+# Configuration lives in machines.conf (same directory as this script).
+# ============================================================================
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONF_FILE="${SCRIPT_DIR}/machines.conf"
+LOG_FILE="/var/log/orion/admin-actions.log"
+
+# ============================================================================
+# Logging
+# ============================================================================
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+log_to_file() {
+  {
+    echo "========================================"
+    echo "ACTION: orion-node $ACTION $NODE"
+    echo "START : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "========================================"
+  } >> "$LOG_FILE" 2>/dev/null || true
+}
+log_end() {
+  {
+    echo "RESULT: $1"
+    echo "END   : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo
+  } >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# ============================================================================
+# Config parser — reads INI-style machines.conf
+# Sets variables prefixed with cfg_ for the requested section
+# ============================================================================
+parse_config() {
+  local target_section="$1"
+  local in_section=false
+  local found=false
+
+  if [[ ! -f "$CONF_FILE" ]]; then
+    log "ERROR: Config file not found: $CONF_FILE"
+    return 1
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Strip leading/trailing whitespace
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" == \#* ]] && continue
+
+    # Section header
+    if [[ "$line" =~ ^\[([a-zA-Z0-9_-]+)\]$ ]]; then
+      if $in_section; then
+        break  # We were in our section and hit the next one — done
+      fi
+      if [[ "${BASH_REMATCH[1]}" == "$target_section" ]]; then
+        in_section=true
+        found=true
+      fi
+      continue
+    fi
+
+    # Key=value inside our section
+    if $in_section && [[ "$line" =~ ^([a-zA-Z0-9_]+)[[:space:]]*=[[:space:]]*(.*) ]]; then
+      local key="${BASH_REMATCH[1]}"
+      local val="${BASH_REMATCH[2]}"
+      declare -g "cfg_${key}=${val}"
+    fi
+  done < "$CONF_FILE"
+
+  if ! $found; then
+    log "ERROR: Node '$target_section' not found in $CONF_FILE"
+    return 1
+  fi
+}
+
+# List all section names from the conf
+list_sections() {
+  grep -oP '^\[\K[a-zA-Z0-9_-]+(?=\])' "$CONF_FILE" 2>/dev/null
+}
+
+# ============================================================================
+# Method functions — MQTT
+# ============================================================================
+method_mqtt_start() {
+  local host="${cfg_mqtt_host:?mqtt_host not set}"
+  local cmd_topic="${cfg_mqtt_cmd_topic:?mqtt_cmd_topic not set}"
+  local status_topic="${cfg_mqtt_status_topic:?mqtt_status_topic not set}"
+
+  log "Checking ESP32 status via MQTT..."
+  local esp_status
+  esp_status=$(mosquitto_sub -h "$host" -t "$status_topic" -C 1 -W 2 2>/dev/null || echo "unreachable")
+
+  if [[ "$esp_status" == "esp32_online" ]]; then
+    log "ESP32 online. Sending start command..."
+    if mosquitto_pub -h "$host" -t "$cmd_topic" -m "pc/on_or_off" 2>&1; then
+      log "MQTT start command sent successfully."
+      return 0
+    else
+      log "ERROR: MQTT publish failed."
+      return 1
+    fi
+  else
+    log "ESP32 not available (status: $esp_status)."
+    return 1
+  fi
+}
+
+method_mqtt_stop() {
+  local host="${cfg_mqtt_host:?mqtt_host not set}"
+  local cmd_topic="${cfg_mqtt_cmd_topic:?mqtt_cmd_topic not set}"
+  local status_topic="${cfg_mqtt_status_topic:?mqtt_status_topic not set}"
+
+  log "Checking ESP32 status via MQTT..."
+  local esp_status
+  esp_status=$(mosquitto_sub -h "$host" -t "$status_topic" -C 1 -W 2 2>/dev/null || echo "unreachable")
+
+  if [[ "$esp_status" == "esp32_online" ]]; then
+    log "ESP32 online. Sending stop command..."
+    if mosquitto_pub -h "$host" -t "$cmd_topic" -m "pc/on_or_off" 2>&1; then
+      log "MQTT stop command sent successfully."
+      return 0
+    else
+      log "ERROR: MQTT publish failed."
+      return 1
+    fi
+  else
+    log "ESP32 not available (status: $esp_status)."
+    return 1
+  fi
+}
+
+# ============================================================================
+# Method functions — Wake-on-LAN
+# ============================================================================
+method_wol_start() {
+  local mac="${cfg_wol_mac:?wol_mac not set}"
+  local broadcast="${cfg_wol_broadcast:?wol_broadcast not set}"
+
+  log "Sending WoL packet to $broadcast (MAC: $mac)..."
+  if wakeonlan -i "$broadcast" "$mac" 2>&1; then
+    log "WoL packet sent successfully."
+    return 0
+  else
+    log "ERROR: WoL failed."
+    return 1
+  fi
+}
+
+# ============================================================================
+# Method functions — SSH
+# ============================================================================
+method_ssh_stop() {
+  local host="${cfg_ssh_host:?ssh_host not set}"
+  local user="${cfg_ssh_user:?ssh_user not set}"
+  local cmd="${cfg_ssh_cmd:?ssh_cmd not set}"
+
+  log "Sending stop command via SSH to ${user}@${host}..."
+  if ssh -o ConnectTimeout=5 -o BatchMode=yes "${user}@${host}" "${cmd}" 2>&1; then
+    log "SSH stop command sent successfully."
+    return 0
+  else
+    log "ERROR: SSH command failed."
+    return 1
+  fi
+}
+
+# ============================================================================
+# Method functions — OCI CLI
+# ============================================================================
+method_oci_start() {
+  local instance_id="${cfg_oci_instance_id:?oci_instance_id not set}"
+  local profile="${cfg_oci_profile:-DEFAULT}"
+  local region_arg=""
+  [[ -n "${cfg_oci_region:-}" ]] && region_arg="--region ${cfg_oci_region}"
+
+  if [[ "$instance_id" == "PLACEHOLDER" ]]; then
+    log "ERROR: OCI instance ID is PLACEHOLDER — configure machines.conf first."
+    return 1
+  fi
+
+  log "Starting OCI instance ${instance_id} (profile: ${profile})..."
+  if oci compute instance action \
+       --instance-id "$instance_id" \
+       --action START \
+       --profile "$profile" \
+       $region_arg 2>&1; then
+    log "OCI start command sent successfully."
+    return 0
+  else
+    log "ERROR: OCI start failed."
+    return 1
+  fi
+}
+
+method_oci_stop() {
+  local instance_id="${cfg_oci_instance_id:?oci_instance_id not set}"
+  local profile="${cfg_oci_profile:-DEFAULT}"
+  local region_arg=""
+  [[ -n "${cfg_oci_region:-}" ]] && region_arg="--region ${cfg_oci_region}"
+
+  if [[ "$instance_id" == "PLACEHOLDER" ]]; then
+    log "ERROR: OCI instance ID is PLACEHOLDER — configure machines.conf first."
+    return 1
+  fi
+
+  log "Stopping OCI instance ${instance_id} (profile: ${profile})..."
+  if oci compute instance action \
+       --instance-id "$instance_id" \
+       --action SOFTSTOP \
+       --profile "$profile" \
+       $region_arg 2>&1; then
+    log "OCI stop command sent successfully."
+    return 0
+  else
+    log "ERROR: OCI stop failed."
+    return 1
+  fi
+}
+
+# ============================================================================
+# Status — Tailscale ping
+# ============================================================================
+status_tailscale() {
+  local host="${cfg_tailscale_host:?tailscale_host not set}"
+
+  log "Pinging ${host} via Tailscale..."
+  if tailscale ping --c 1 --timeout 3s "$host" 2>&1; then
+    return 0
+  else
+    log "Node ${host} is unreachable via Tailscale."
+    return 1
+  fi
+}
+
+# ============================================================================
+# Dispatcher — tries methods in order from the comma-separated list
+# ============================================================================
+dispatch() {
+  local action="$1"       # start or stop
+  local methods_csv="$2"  # e.g. "mqtt,wol"
+
+  IFS=',' read -ra methods <<< "$methods_csv"
+  for method in "${methods[@]}"; do
+    method="${method#"${method%%[![:space:]]*}"}"  # trim whitespace
+    method="${method%"${method##*[![:space:]]}"}"
+
+    local func="method_${method}_${action}"
+    if declare -f "$func" > /dev/null 2>&1; then
+      log "Trying method: ${method}..."
+      if "$func"; then
+        return 0
+      else
+        log "Method ${method} failed. Trying next fallback..."
+      fi
+    else
+      log "WARNING: Unknown method '${method}' for action '${action}'. Skipping."
+    fi
+  done
+
+  log "ERROR: All methods exhausted. Could not ${action} node."
+  return 1
+}
+
+# ============================================================================
+# Commands
+# ============================================================================
+cmd_start() {
+  local node="$1"
+  parse_config "$node" || return 1
+
+  local methods="${cfg_start_method:?start_method not defined for $node}"
+  log "Starting node: $node"
+  log_to_file
+  if dispatch "start" "$methods"; then
+    log_end "SUCCESS"
+  else
+    log_end "FAILED"
+    return 1
+  fi
+}
+
+cmd_stop() {
+  local node="$1"
+  parse_config "$node" || return 1
+
+  local methods="${cfg_stop_method:?stop_method not defined for $node}"
+  log "Stopping node: $node"
+  log_to_file
+  if dispatch "stop" "$methods"; then
+    log_end "SUCCESS"
+  else
+    log_end "FAILED"
+    return 1
+  fi
+}
+
+cmd_status() {
+  local node="$1"
+  parse_config "$node" || return 1
+
+  if [[ -z "${cfg_tailscale_host:-}" ]]; then
+    log "ERROR: No tailscale_host configured for $node"
+    return 1
+  fi
+
+  status_tailscale
+}
+
+cmd_list() {
+  local sections
+  sections=$(list_sections)
+
+  if [[ -z "$sections" ]]; then
+    log "No nodes registered in $CONF_FILE"
+    return 0
+  fi
+
+  printf "%-20s %-25s %s\n" "NODE" "TAILSCALE HOST" "STATUS"
+  printf "%-20s %-25s %s\n" "----" "--------------" "------"
+
+  for section in $sections; do
+    # Reset cfg_ variables for each section
+    unset "${!cfg_@}" 2>/dev/null || true
+    parse_config "$section" 2>/dev/null || continue
+
+    local ts_host="${cfg_tailscale_host:-N/A}"
+    local status="unknown"
+
+    if [[ "$ts_host" != "N/A" ]]; then
+      if tailscale ping --c 1 --timeout 2s "$ts_host" > /dev/null 2>&1; then
+        status="online"
+      else
+        status="offline"
+      fi
+    fi
+
+    printf "%-20s %-25s %s\n" "$section" "$ts_host" "$status"
+  done
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+usage() {
+  echo "Usage: orion-node <command> [node]"
+  echo ""
+  echo "Commands:"
+  echo "  start  <node>    Start/wake a machine"
+  echo "  stop   <node>    Stop/sleep a machine"
+  echo "  status <node>    Check reachability via Tailscale"
+  echo "  list             Show all registered nodes + status"
+  echo ""
+  echo "Nodes are defined in: $CONF_FILE"
+}
+
+ACTION="${1:-}"
+NODE="${2:-}"
+
+case "$ACTION" in
+  start)
+    [[ -z "$NODE" ]] && { usage; exit 1; }
+    cmd_start "$NODE"
+    ;;
+  stop)
+    [[ -z "$NODE" ]] && { usage; exit 1; }
+    cmd_stop "$NODE"
+    ;;
+  status)
+    [[ -z "$NODE" ]] && { usage; exit 1; }
+    cmd_status "$NODE"
+    ;;
+  list)
+    cmd_list
+    ;;
+  -h|--help|"")
+    usage
+    ;;
+  *)
+    log "ERROR: Unknown command: $ACTION"
+    usage
+    exit 1
+    ;;
+esac

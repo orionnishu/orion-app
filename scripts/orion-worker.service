@@ -1,0 +1,16 @@
+[Unit]
+Description=Orion Distributed Worker Agent
+After=network.target docker.service tailscaled.service
+Requires=docker.service tailscaled.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/usr/bin/python3 /usr/local/bin/orion-worker.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

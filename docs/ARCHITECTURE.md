@@ -1,6 +1,6 @@
 # ORION Architecture
 
-This document describes the **actual working ORION architecture**.
+This document describes the **actual working ORION architecture** — a hybrid edge-cloud system anchored by a Raspberry Pi 5 control plane with Oracle Cloud compute workers.
 
 ---
 
@@ -12,40 +12,63 @@ graph TB
         TS[Tailscale Funnel]
     end
 
-    subgraph "Raspberry Pi 5"
-        FastAPI["FastAPI :8000<br/>Dashboard & Control Plane"]
-        Nginx["Nginx :8082<br/>WebDAV + Jellyfin proxy"]
-        Jellyfin["Jellyfin :8096<br/>Docker container"]
-        Mosquitto["Mosquitto :1883<br/>MQTT Broker"]
-        PiMon["Pi-Monitor<br/>Cron + SQLite"]
-        Tailscale["Tailscale Serve<br/>HTTPS Routing"]
+    subgraph "Home Edge - Always On"
+        subgraph "Raspberry Pi 5"
+            FastAPI["FastAPI :8000<br/>Dashboard & Control Plane"]
+            Nginx["Nginx :8082<br/>WebDAV proxy"]
+            Mosquitto["Mosquitto :1883<br/>MQTT Broker"]
+            PiMon["Pi-Monitor<br/>Cron + SQLite"]
+            RedisR["Redis Replica :6379"]
+            NodeExpPi["Node Exporter :9100"]
+            Tailscale["Tailscale Serve<br/>HTTPS Routing"]
+        end
+        ESP32["ESP32-MDR<br/>MQTT → GPIO4"]
+        PC["Windows PC<br/>Fallback Worker"]
     end
 
-    subgraph "ESP32 (Master Bedroom)"
-        ESP32["ESP32-MDR<br/>MQTT → GPIO4 Power Button"]
+    subgraph "Oracle Cloud - Always On"
+        subgraph "cloud2-vm2 - 1 oCPU / 6GB"
+            RedisP["Redis Primary :6379"]
+            Prom["Prometheus :9090"]
+            Grafana["Grafana :3000"]
+            PushGW["Pushgateway :9091"]
+            NodeExpVM2["Node Exporter :9100"]
+        end
     end
 
-    subgraph "Desktop PC"
-        PC["Windows PC<br/>192.168.0.102"]
-    end
-
-    subgraph "WD HDD (USB)"
-        HDD1["/mnt/orion-media<br/>NTFS 1.4TB — read-only"]
-        HDD2["/mnt/orion-data<br/>ext4 48GB — Docker + Jellyfin"]
+    subgraph "Oracle Cloud - On-Demand Workers"
+        VM1["cloud2-vm1<br/>3 oCPU / 18GB<br/>orion-worker agent"]
+        VM3["cloud1-vm1<br/>4 oCPU / 23GB<br/>orion-worker agent"]
     end
 
     TS <--> Tailscale
-    Tailscale -->"|/"| Nginx
-    Tailscale -->"|/app"| FastAPI
-    Nginx -->"|/jellyfin"| Jellyfin
-    FastAPI -->"|mosquitto_sub/pub"| Mosquitto
-    Mosquitto <-->|"orion/pc/cmd<br/>orion/pc/status"| ESP32
-    ESP32 -->"|GPIO4 pulse"| PC
-    FastAPI -->"|Port 445 check"| PC
-    PiMon -->"|metrics"| FastAPI
-    Jellyfin --- HDD1
-    HDD2 --- Jellyfin
+    Tailscale -->|"/"| Nginx
+    Tailscale -->|"/app"| FastAPI
+    FastAPI --> Mosquitto
+    Mosquitto <-->|"MQTT LAN"| ESP32
+    ESP32 -->|"GPIO4"| PC
+    FastAPI -->|"Port 445"| PC
+    PiMon --> FastAPI
+    RedisR -.->|"replicaof"| RedisP
+    NodeExpPi -.->|"scrape"| Prom
+    NodeExpVM2 -.->|"scrape"| Prom
+    VM1 -->|"pull jobs"| RedisP
+    VM3 -->|"pull jobs"| RedisP
+    VM1 -->|"push metrics"| PushGW
+    VM3 -->|"push metrics"| PushGW
+    FastAPI -->|"OCI CLI"| VM1
+    FastAPI -->|"OCI CLI"| VM3
 ```
+
+### Node Inventory
+
+| Node | Tailscale Hostname | Tailscale IP | Specs | Role | Status |
+|---|---|---|---|---|---|
+| Raspberry Pi 5 | `orion-raspian` | `100.90.202.45` | 4 cores / 4GB | Edge Control Plane | ✅ Always-on |
+| oracle-cloud2-vm2 | `orion-cloud2-vm2` | `100.117.244.106` | 1 oCPU / 6GB | Infra (Redis, Prometheus, Grafana) | ✅ Always-on |
+| oracle-cloud2-vm1 | `orion-cloud2-vm1` | `100.113.71.36` | 3 oCPU / 18GB | Medium Compute Worker | ⏸️ On-demand |
+| oracle-cloud1-vm1 | `orion-cloud1-vm1` | `100.69.124.29` | 4 oCPU / 23GB | Large Compute Worker | ⏸️ On-demand |
+| Desktop PC | `orion-desktoppc-*` | `100.91.57.93` | 6 cores / 16GB | Fallback Worker + GPU | ⏸️ On-demand |
 
 ---
 
@@ -96,6 +119,10 @@ graph TB
 - **Archival**: Weekly aggregation and pruning (`archive_weekly.sql`).
 
 ### 1.6 Jellyfin (Docker)
+
+> [!WARNING]
+> **Currently uninstalled.** Docker and Jellyfin were removed from the Pi during the distributed architecture work. Reinstallation is planned for Phase 5.
+
 - **Container**: `jellyfin` (image: `jellyfin/jellyfin:latest`, `restart: unless-stopped`)
 - **Port**: `8096`
 - **Compose file**: `/opt/orion-docker/jellyfin/docker-compose.yml`
@@ -117,11 +144,28 @@ graph TB
 
 ---
 
-## 2. PC Wake/Sleep Flow
+## 2. Machine Control (`orion-node` CLI)
+
+All nodes are managed through a single unified CLI script (`scripts/orion-node`) with a configuration registry (`scripts/machines.conf`).
+
+```
+orion-node start <node>     # Start/wake a machine
+orion-node stop <node>      # Stop/sleep a machine
+orion-node status <node>    # Check reachability via tailscale ping
+orion-node list             # All registered nodes + live status
+```
+
+Methods are internal bash functions (MQTT, WoL, SSH, OCI CLI, Tailscale ping). Each node's `machines.conf` entry defines its start/stop methods with a fallback chain.
+
+Backward-compatible wrappers:
+- `scripts/wakemypc.sh` → `exec orion-node start desktop-pc`
+- `scripts/sleepmypc.sh` → `exec orion-node stop desktop-pc`
+
+### PC Wake/Sleep Flow
 
 ```mermaid
 flowchart LR
-    Script["wakemypc.sh<br/>sleepmypc.sh"] --> Check{"ESP32 online?<br/>(retained MQTT status)"}
+    Script["orion-node start/stop desktop-pc"] --> Check{"ESP32 online?<br/>(retained MQTT status)"}
     Check -- "esp32_online" --> MQTT["mosquitto_pub<br/>pc/on_or_off"]
     MQTT --> ESP32["ESP32 GPIO4 pulse"]
     ESP32 --> PC["PC power button"]
@@ -131,6 +175,17 @@ flowchart LR
     WoL --> PC
     SSH --> PC
 ```
+
+### FastAPI Node Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/admin/api/node/{name}/start` | POST | Start any node |
+| `/admin/api/node/{name}/stop` | POST | Stop any node |
+| `/admin/api/node/{name}/status` | GET | Check node reachability |
+| `/admin/api/nodes` | GET | List all nodes + status |
+| `/admin/api/wake-pc` | POST | Backward compat alias |
+| `/admin/api/sleep-pc` | POST | Backward compat alias |
 
 ---
 
@@ -228,29 +283,75 @@ UUID=86ef87e2-b8c4-4ef7-bad2-b52c2e459cdc  /mnt/orion-data  ext4  defaults,noati
 
 ---
 
-## 7. Maintenance
+## 7. Distributed Infrastructure (Cloud)
 
-- **Backups**: Scripts in `scripts/` (e.g., `pisync_to_pc.sh`) handle intermittent backups.
-- **Cleanup**: Weekly database archival ensures the monitoring database remains performant.
+### 7.1 Redis (Job Queue & State Store)
+
+| Instance | Location | Role | Bind Address |
+|---|---|---|---|
+| Redis Primary | VM2 (Docker: `redis:7-alpine`) | Handles job queues, worker state | `100.117.244.106:6379` |
+| Redis Replica | Pi (native `redis-server`) | Hot standby, auto-replication | `100.90.202.45:6379` |
+
+Both use `appendonly yes` for persistence. The replica continuously syncs from the primary over Tailscale.
+
+**Configuration in repo**: `infra/vm2/docker-compose.yml`, `infra/pi/setup_redis_replica.sh`
+
+### 7.2 Prometheus + Grafana (Monitoring)
+
+All monitoring services run as Docker containers on VM2, bound to the Tailscale IP only:
+
+| Service | Port | Purpose |
+|---|---|---|
+| Prometheus | `100.117.244.106:9090` | Metrics collection & alerting |
+| Grafana | `100.117.244.106:3000` | Dashboards & visualization |
+| Pushgateway | `100.117.244.106:9091` | Receives short-lived metrics from workers |
+| Node Exporter (VM2) | `100.117.244.106:9100` | VM2 system metrics |
+| Node Exporter (Pi) | `100.90.202.45:9100` | Pi system metrics |
+| Node Exporter (Workers) | `:9100` on each worker | Worker system metrics (when running) |
+
+**Configuration in repo**: `infra/vm2/docker-compose.yml`, `infra/vm2/prometheus/prometheus.yml`
+
+### 7.3 Worker Agent (`orion-worker`)
+
+A Python agent (`scripts/orion-worker.py`) deployed as a systemd service on each worker VM:
+- Registers with Redis on startup (heartbeat in `orion:workers`)
+- Listens on queue: `orion:queue:medium` (cloud2-vm1) or `orion:queue:large` (cloud1-vm1)
+- Executes shell/Docker commands from jobs
+- Pushes job metrics to Pushgateway
+- Self-shuts down after 10 minutes of idle, calling the Pi's FastAPI endpoint
+
+**Configuration in repo**: `scripts/orion-worker.py`, `scripts/orion-worker.service`, `infra/workers/deploy-worker.sh`
 
 ---
 
-## 8. System Integration
+## 8. Maintenance
 
-To ensure high portability, core system configurations are stored in the repository under `system_configs/` and symlinked to their respective system locations.
+- **Backups**: Scripts in `scripts/` (e.g., `pisync_to_pc.sh`) handle intermittent backups.
+- **Cleanup**: Weekly database archival ensures the monitoring database remains performant.
+- **VM Reproducibility**: All infrastructure configs stored in `infra/` with setup scripts.
 
-### 8.1 Repository Managed (Internal)
-*   **Systemd**: `system_configs/systemd/orion-webapp.service` → `/etc/systemd/system/`
-*   **Nginx**: `system_configs/nginx/orion-webdav` → `/etc/nginx/sites-available/`
-*   **Cron**: `system_configs/cron/crontab.txt` (Template source for `crontab -e`)
-*   **Docker Compose**: `/opt/orion-docker/jellyfin/docker-compose.yml` (manually managed, not in repo)
+---
 
-### 8.2 System Only (External)
+## 9. System Integration
+
+To ensure high portability, core system configurations are stored in the repository under `system_configs/` and `infra/`, and symlinked or deployed to their respective system locations.
+
+### 9.1 Repository Managed (Internal)
+*   **Systemd (Pi)**: `system_configs/systemd/orion-webapp.service` → `/etc/systemd/system/`
+*   **Nginx (Pi)**: `system_configs/nginx/orion-webdav` → `/etc/nginx/sites-available/`
+*   **Cron (Pi)**: `system_configs/cron/crontab.txt` (Template source for `crontab -e`)
+*   **VM2 Stack**: `infra/vm2/docker-compose.yml` (Redis, Prometheus, Grafana, Pushgateway, Node Exporter)
+*   **VM2 Prometheus**: `infra/vm2/prometheus/prometheus.yml`
+*   **Pi Redis Replica**: `infra/pi/setup_redis_replica.sh`
+*   **Worker Agent**: `scripts/orion-worker.py` + `scripts/orion-worker.service`
+*   **Machine Control**: `scripts/orion-node` + `scripts/machines.conf`
+
+### 9.2 System Only (External)
 The following items **cannot** be in the repository for security or technical reasons:
 *   **Secrets**: `/etc/nginx/dav/users.htpasswd` (Passwords).
 *   **Mounts**: `/etc/fstab` (System-specific UUIDs).
 *   **Tailscale**: Proprietary state managed by the Tailscale daemon.
 *   **Database**: `services/pi-monitor/db/pi-monitor.db` (Git-ignored live data).
 *   **MQTT Broker**: Mosquitto config at `/etc/mosquitto/` (system-managed).
-*   **Docker daemon config**: `/etc/docker/daemon.json` (system-managed, `data-root` set to `/mnt/orion-data/docker`).
-*   **Jellyfin config**: `/mnt/orion-data/jellyfin/config/` (on HDD, not in repo).
+*   **OCI CLI config**: `~/.oci/` (API keys and tenancy config).
+*   **SSH keys**: `~/.ssh/` (private keys for VM access).

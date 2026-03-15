@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status, Query, Form
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Query, Form, Path as PathParam
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -112,18 +112,86 @@ def admin(request: Request, user: str = Depends(authenticate)):
     )
 
 # ------------------------------------------------------------------
-# JSON Admin Trigger Endpoints (ASYNC, NO PAGE RELOAD)
+# Generalized Node Lifecycle Endpoints (via orion-node script)
 # ------------------------------------------------------------------
+ORION_NODE_SCRIPT = SCRIPTS_DIR / "orion-node"
+
+@app.post("/admin/api/node/{name}/start", response_class=JSONResponse)
+def api_node_start(name: str = PathParam(...), user: str = Depends(authenticate)):
+    """Start/wake any registered node via orion-node CLI"""
+    result = subprocess.run(
+        [str(ORION_NODE_SCRIPT), "start", name],
+        capture_output=True, text=True, timeout=30
+    )
+    return {
+        "status": "ok" if result.returncode == 0 else "error",
+        "action": "start",
+        "node": name,
+        "output": result.stdout.strip(),
+        "error": result.stderr.strip() if result.returncode != 0 else None
+    }
+
+@app.post("/admin/api/node/{name}/stop", response_class=JSONResponse)
+def api_node_stop(name: str = PathParam(...), user: str = Depends(authenticate)):
+    """Stop/sleep any registered node via orion-node CLI"""
+    result = subprocess.run(
+        [str(ORION_NODE_SCRIPT), "stop", name],
+        capture_output=True, text=True, timeout=30
+    )
+    return {
+        "status": "ok" if result.returncode == 0 else "error",
+        "action": "stop",
+        "node": name,
+        "output": result.stdout.strip(),
+        "error": result.stderr.strip() if result.returncode != 0 else None
+    }
+
+@app.get("/admin/api/node/{name}/status", response_class=JSONResponse)
+def api_node_status(name: str = PathParam(...), user: str = Depends(authenticate)):
+    """Check reachability of any registered node via Tailscale ping"""
+    result = subprocess.run(
+        [str(ORION_NODE_SCRIPT), "status", name],
+        capture_output=True, text=True, timeout=10
+    )
+    return {
+        "status": "ok" if result.returncode == 0 else "error",
+        "node": name,
+        "reachable": result.returncode == 0,
+        "output": result.stdout.strip()
+    }
+
+@app.get("/admin/api/nodes", response_class=JSONResponse)
+def api_node_list(user: str = Depends(authenticate)):
+    """List all registered nodes with live status"""
+    result = subprocess.run(
+        [str(ORION_NODE_SCRIPT), "list"],
+        capture_output=True, text=True, timeout=30
+    )
+    # Parse the tabular output into structured data
+    nodes = []
+    for line in result.stdout.strip().split("\n")[2:]:  # Skip header + separator
+        parts = line.split()
+        if len(parts) >= 3:
+            nodes.append({
+                "name": parts[0],
+                "tailscale_host": parts[1],
+                "status": parts[2]
+            })
+    return nodes
+
+# --- Backward-compatible PC aliases (call the generalized endpoints) ---
 
 @app.post("/admin/api/wake-pc", response_class=JSONResponse)
 def api_wake_pc(user: str = Depends(authenticate)):
-    subprocess.Popen([str(SCRIPTS_DIR / "wakemypc.sh")])
+    subprocess.Popen([str(ORION_NODE_SCRIPT), "start", "desktop-pc"])
     return {"status": "ok", "action": "wake-pc"}
 
 @app.post("/admin/api/sleep-pc", response_class=JSONResponse)
 def api_sleep_pc(user: str = Depends(authenticate)):
-    subprocess.Popen([str(SCRIPTS_DIR / "sleepmypc.sh")])
+    subprocess.Popen([str(ORION_NODE_SCRIPT), "stop", "desktop-pc"])
     return {"status": "ok", "action": "sleep-pc"}
+
+# --- Other admin triggers ---
 
 @app.post("/admin/api/pisync", response_class=JSONResponse)
 def api_pi_sync(user: str = Depends(authenticate)):

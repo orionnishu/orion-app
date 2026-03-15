@@ -300,3 +300,125 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/   # 401
 - **MQTT Broker**: `systemctl status mosquitto`
 - **ESP32 Status**: `mosquitto_sub -h 192.168.0.103 -t orion/pc/status -C 1`
 - **PC Status**: `curl -u orion:pass http://127.0.0.1:8000/api/pc-status`
+
+---
+
+## ☁️ 11. Oracle Cloud VMs (Distributed Architecture)
+
+> [!NOTE]
+> All infrastructure configs and setup scripts are stored in `infra/` within the repo for reproducibility.
+
+### 11.1 VM Provisioning (Oracle Cloud Console)
+1. Create ARM (Ampere A1) instances on Oracle Cloud:
+   - **cloud2-vm2** (1 oCPU / 6GB) — always-on infra node
+   - **cloud2-vm1** (3 oCPU / 18GB) — on-demand medium worker
+   - **cloud1-vm1** (4 oCPU / 23GB) — on-demand large worker (separate tenancy)
+2. Add SSH keys during creation; save `.key` files to `~/.ssh/`
+3. Add entries to `~/.ssh/config` on the Pi
+
+### 11.2 Install Tailscale on each VM
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+### 11.3 Install Docker on each VM
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker ubuntu
+```
+
+### 11.4 SSH Hardening (verify on all VMs)
+```bash
+sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin'
+# Expected: passwordauthentication no, permitrootlogin without-password
+```
+
+---
+
+## 🗄️ 12. Redis (Primary on VM2, Replica on Pi)
+
+### 12.1 Deploy Redis Primary (VM2)
+Use the docker-compose file from the repo:
+```bash
+# On VM2:
+scp -o ProxyCommand="tailscale nc %h %p" infra/vm2/docker-compose.yml ubuntu@orion-cloud2-vm2:~/orion-infra/stack/
+ssh -o ProxyCommand="tailscale nc %h %p" ubuntu@orion-cloud2-vm2 "cd ~/orion-infra/stack && docker compose up -d redis-primary"
+```
+
+### 12.2 Configure Redis Replica (Pi)
+```bash
+cd /home/orion/server
+bash infra/pi/setup_redis_replica.sh
+```
+
+### 12.3 Verify Replication
+```bash
+redis-cli info replication
+# Expected: role:slave, master_link_status:up
+```
+
+---
+
+## 📊 13. Monitoring Stack (Prometheus + Grafana on VM2)
+
+### 13.1 Deploy Full Stack
+```bash
+# Transfer config files to VM2
+scp -o ProxyCommand="tailscale nc %h %p" infra/vm2/docker-compose.yml ubuntu@orion-cloud2-vm2:~/orion-infra/stack/
+scp -o ProxyCommand="tailscale nc %h %p" infra/vm2/prometheus/prometheus.yml ubuntu@orion-cloud2-vm2:~/orion-infra/stack/prometheus/
+
+# Ensure permissions for Grafana data dir
+ssh -o ProxyCommand="tailscale nc %h %p" ubuntu@orion-cloud2-vm2 "sudo chown -R 472:472 ~/orion-infra/stack/grafana/data"
+
+# Start
+ssh -o ProxyCommand="tailscale nc %h %p" ubuntu@orion-cloud2-vm2 "cd ~/orion-infra/stack && docker compose up -d"
+```
+
+### 13.2 Install Node Exporter on Pi
+```bash
+sudo apt-get install -y prometheus-node-exporter
+```
+
+### 13.3 Verify
+```bash
+curl -s 100.117.244.106:9090/-/healthy       # Prometheus
+curl -s 100.117.244.106:3000/api/health       # Grafana
+curl -s 100.90.202.45:9100/metrics | head -1  # Pi Node Exporter
+```
+
+---
+
+## 🤖 14. Worker Agent (On-Demand VMs)
+
+### 14.1 Deploy Worker Agent
+```bash
+cd /home/orion/server
+bash infra/workers/deploy-worker.sh orion-cloud2-vm1
+bash infra/workers/deploy-worker.sh orion-cloud1-vm1
+```
+
+### 14.2 Verify Workers Registered
+```bash
+redis-cli -h 100.117.244.106 hgetall orion:workers
+# Expected: entries for each running worker with status=idle
+```
+
+---
+
+## 🔧 15. Machine Control CLI (`orion-node`)
+
+The `scripts/orion-node` script manages all node lifecycles. It's already in the repo and needs no installation.
+
+### Verify
+```bash
+./scripts/orion-node list          # All nodes + live status
+./scripts/orion-node status desktop-pc   # Tailscale ping
+```
+
+### OCI CLI Setup (for VM start/stop)
+```bash
+~/bin/oci setup config
+# Configure profiles: cloud1 (Free Tier), cloud2 (PAYG)
+# Then populate scripts/machines.conf with OCI instance IDs
+```
