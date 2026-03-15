@@ -270,6 +270,78 @@ def api_job_submit(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to submit job: {str(e)}")
 
+@app.get("/admin/api/job/{job_id}/status", response_class=JSONResponse)
+def api_job_status(job_id: str = PathParam(...), user: str = Depends(authenticate)):
+    """Check the status and result of a specific job"""
+    try:
+        r = get_redis_client()
+        
+        # 1. Check if it's completed (in result cache)
+        result_str = r.get(f"orion:result:{job_id}")
+        if result_str:
+            data = json.loads(result_str)
+            return {"job_id": job_id, "state": "completed", "result": data}
+            
+        # 2. Check if a worker is currently executing it
+        workers_data = r.hgetall("orion:workers")
+        for worker_name, worker_info_str in workers_data.items():
+            try:
+                w_info = json.loads(worker_info_str)
+                if w_info.get("current_job") == job_id:
+                    return {
+                        "job_id": job_id,
+                        "state": "running",
+                        "worker": worker_name,
+                        "duration_so_far": time.time() - w_info.get("last_seen", time.time())
+                    }
+            except:
+                pass
+                
+        # 3. If not completed or running, it's either pending in queue or doesn't exist.
+        # (Scanning queues for a specific job is inefficient, so we just return pending for now)
+        return {"job_id": job_id, "state": "pending_or_unknown"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
+
+@app.get("/admin/api/jobs/cluster-state", response_class=JSONResponse)
+def api_cluster_state(user: str = Depends(authenticate)):
+    """Returns the macro state of the distributed queue system"""
+    try:
+        r = get_redis_client()
+        
+        queues = {
+            "default": r.llen("orion:queue:default"),
+            "medium": r.llen("orion:queue:medium"),
+            "large": r.llen("orion:queue:large")
+        }
+        
+        workers = {}
+        workers_data = r.hgetall("orion:workers")
+        now = time.time()
+        
+        for w_name, w_info_str in workers_data.items():
+            try:
+                w_info = json.loads(w_info_str)
+                # Determine if worker is actually alive (checked in within last 5 mins)
+                is_alive = now - w_info.get("last_seen", 0) < 300
+                if is_alive:
+                    w_info["idle_time"] = int(now - w_info.get("last_seen", now))
+                    workers[w_name] = w_info
+            except:
+                pass
+                
+        return {
+            "status": "ok",
+            "queues": queues,
+            "active_workers": workers,
+            "total_pending_jobs": sum(queues.values()),
+            "total_active_workers": len(workers)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Redis error: {str(e)}")
+
 # ------------------------------------------------------------------
 # WebDAV User Management
 # ------------------------------------------------------------------
