@@ -14,6 +14,7 @@ from pathlib import Path
 from collections import deque
 import uuid
 import redis
+import markdown
 
 # Support for being served under a subpath (e.g., /app via Tailscale)
 ROOT_PATH = os.environ.get("ROOT_PATH", "")
@@ -110,9 +111,39 @@ def admin(request: Request, user: str = Depends(authenticate)):
         {
             "request": request,
             "title": "Admin",
-            "pc_online": is_pc_online()
+            "pc_online": is_pc_online(),
+            "root_path": ROOT_PATH
         }
     )
+
+@app.get("/docs/{doc_name:path}", response_class=HTMLResponse)
+def view_doc(request: Request, doc_name: str, user: str = Depends(authenticate)):
+    """Render a markdown document as HTML"""
+    doc_path = Path("docs") / doc_name
+    
+    # Prevent path traversal
+    if ".." in doc_path.parts or not doc_path.is_relative_to("docs"):
+        raise HTTPException(status_code=403, detail="Invalid path")
+        
+    if not doc_path.exists() or not doc_path.is_file():
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    try:
+        with open(doc_path, "r", encoding="utf-8") as f:
+            md_text = f.read()
+            
+        html_content = markdown.markdown(md_text, extensions=['fenced_code', 'tables'])
+        
+        return templates.TemplateResponse(
+            "doc_viewer.html",
+            {
+                "request": request,
+                "title": doc_path.name,
+                "content_html": html_content
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to render document: {str(e)}")
 
 # ------------------------------------------------------------------
 # Generalized Node Lifecycle Endpoints (via orion-node script)
